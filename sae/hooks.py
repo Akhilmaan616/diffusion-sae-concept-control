@@ -134,12 +134,38 @@ class ActivationCapture:
     # ------------------------------------------------------------------ setup
 
     def attach(self) -> "ActivationCapture":
+        # Read the timestep straight off the UNet's own forward arguments.
+        #
+        # The obvious approach -- have the sampler tell us via
+        # `callback_on_step_end` -- is wrong, and wrong in a way that looks
+        # fine. That callback fires *after* a step, so the value it reports is
+        # the timestep that was just used, and every activation gets labelled
+        # with the previous step's t. The first forward pass has no callback at
+        # all and falls back to the 999.0 default. Net effect on a 25-step DDIM
+        # schedule: the true bucket distribution 9/8/8 is recorded as 8/8/9,
+        # every token is tagged one step too early, and the error is invisible
+        # unless you check the shard sizes against the schedule.
+        #
+        # A forward pre-hook on the UNet sees `timestep` as an argument, so the
+        # attribution is exact and no sampler cooperation is needed.
+        self._handles.append(
+            self.unet.register_forward_pre_hook(self._timestep_hook, with_kwargs=True)
+        )
         for site in self.cfg.sites:
             mod = get_module(self.unet, site)
             self._handles.append(
                 mod.register_forward_hook(self._make_hook(site))
             )
         return self
+
+    def _timestep_hook(self, module, args, kwargs):
+        t = kwargs.get("timestep", args[1] if len(args) > 1 else None)
+        if t is None:
+            return
+        if torch.is_tensor(t):
+            t = t.flatten()[0] if t.numel() else None
+        if t is not None:
+            self._t = float(t)
 
     def detach(self) -> None:
         for h in self._handles:
@@ -153,13 +179,10 @@ class ActivationCapture:
         self._t = float(t.item() if torch.is_tensor(t) else t)
 
     def diffusers_callback(self, pipe, step_index, timestep, callback_kwargs):
-        """Hand this to ``callback_on_step_end``.
-
-        Note it fires at the *end* of a step, so it reports the timestep that
-        was just used; we set it for the next forward pass. The off-by-one is
-        harmless at bucket granularity but worth knowing about.
-        """
-        self.set_timestep(timestep)
+        """Kept only so existing call sites keep working. It is now a no-op:
+        the forward pre-hook already has the exact timestep, and this callback
+        fires one step late (see ``attach``). Passing it does no harm; not
+        passing it is fine too."""
         return callback_kwargs
 
     # ------------------------------------------------------------------- hook

@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sae.hooks import ActivationCapture, CaptureConfig, SD15_SITES, DEFAULT_SITE
 from sae.data import ShardWriter
 from sae.prompts import DISCOVERY
+from sae.prompt_corpus import build_discovery, coverage
 
 
 def main():
@@ -46,18 +47,18 @@ def main():
     ap.add_argument("--guidance", type=float, default=7.5)
     ap.add_argument("--size", type=int, default=512)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--corpus", type=int, default=0,
+                    help="use a combinatorial corpus of this many distinct prompts "
+                         "instead of the 32 hand-written ones (0 = hand-written)")
     args = ap.parse_args()
 
-    from diffusers import StableDiffusionPipeline
+    from sae.loader import load_pipeline
 
     sites = list(SD15_SITES) if args.all_sites else args.sites
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device == "cuda" else torch.float32
 
-    pipe = StableDiffusionPipeline.from_pretrained(
-        args.model, torch_dtype=dtype, safety_checker=None, requires_safety_checker=False
-    ).to(device)
-    pipe.set_progress_bar_config(disable=True)
+    pipe = load_pipeline(args.model, dtype=dtype, device=device)
 
     cfg = CaptureConfig(sites=tuple(sites), cond_only=True,
                         tokens_per_pass=args.tokens_per_pass, seed=args.seed)
@@ -66,7 +67,13 @@ def main():
     out = Path(args.out)
     writers: dict[tuple[str, int], ShardWriter] = {}
 
-    prompts = (DISCOVERY * ((args.n_images // len(DISCOVERY)) + 1))[:args.n_images]
+    base = build_discovery(args.corpus, seed=args.seed) if args.corpus else DISCOVERY
+    if args.corpus:
+        import json as _json
+        print(_json.dumps(coverage(base), indent=2))
+    prompts = (base * ((args.n_images // len(base)) + 1))[:args.n_images]
+    print(f"{len(set(prompts))} distinct prompts across {args.n_images} images "
+          f"({args.n_images / len(set(prompts)):.1f} renders each)")
     gen = torch.Generator(device=device).manual_seed(args.seed)
 
     done = 0

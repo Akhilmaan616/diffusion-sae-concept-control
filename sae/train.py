@@ -87,6 +87,31 @@ def train_sae(store: ActivationStore, sae_cfg: SAEConfig, cfg: TrainConfig,
     sae = SparseAutoencoder(sae_cfg).to(device)
     store.device = device
 
+    # Data-sufficiency check. The failure this catches is quiet and expensive:
+    # a dictionary far larger than the data can support still trains, still
+    # reports a respectable explained variance (a handful of high-density
+    # features carry the reconstruction), and still produces an atlas -- while
+    # most of the dictionary never fires and the "features" you inspect are
+    # whatever the few live latents absorbed. Dead fraction reveals it after the
+    # fact; this reveals it before you spend the GPU time.
+    tokens_per_feature = store.n_tokens / sae_cfg.d_hidden
+    if verbose:
+        print(f"data budget: {store.n_tokens:,} tokens / {sae_cfg.d_hidden:,} features "
+              f"= {tokens_per_feature:.1f} tokens per feature")
+        if tokens_per_feature < 20:
+            suggested = max(1, int(store.n_tokens / (20 * sae_cfg.d_in)))
+            print(f"  WARNING: under ~20 tokens/feature most of the dictionary will "
+                  f"never fire.\n"
+                  f"  Either capture more tokens (raising --tokens-per-pass is nearly "
+                  f"free -- the\n"
+                  f"  diffusion forward passes dominate capture cost) or drop "
+                  f"--expansion to <= {suggested}.\n"
+                  f"  If you train anyway, report the ratio and the dead fraction "
+                  f"together.")
+        elif tokens_per_feature < 100:
+            print("  note: thin but trainable. Expect a non-trivial dead fraction; "
+                  "report it.")
+
     target_l1 = sae.cfg.l1_coef
     opt = torch.optim.Adam(sae.parameters(), lr=cfg.lr, betas=(0.9, 0.999), eps=1e-8)
 

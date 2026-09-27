@@ -70,15 +70,12 @@ def main():
     ap.add_argument("--save-grids", default="outputs/grids")
     args = ap.parse_args()
 
-    from diffusers import StableDiffusionPipeline
+    from sae.loader import load_pipeline
     from transformers import CLIPModel, CLIPProcessor
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device == "cuda" else torch.float32
-    pipe = StableDiffusionPipeline.from_pretrained(
-        args.model, torch_dtype=dtype, safety_checker=None, requires_safety_checker=False
-    ).to(device)
-    pipe.set_progress_bar_config(disable=True)
+    pipe = load_pipeline(args.model, dtype=dtype, device=device)
 
     scorer = ClipScorer(CLIPModel.from_pretrained(args.clip).to(device).eval(),
                         CLIPProcessor.from_pretrained(args.clip), device)

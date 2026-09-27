@@ -75,14 +75,11 @@ def main():
     ap.add_argument("--top", type=int, default=10)
     args = ap.parse_args()
 
-    from diffusers import StableDiffusionPipeline
+    from sae.loader import load_pipeline
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device == "cuda" else torch.float32
-    pipe = StableDiffusionPipeline.from_pretrained(
-        args.model, torch_dtype=dtype, safety_checker=None, requires_safety_checker=False
-    ).to(device)
-    pipe.set_progress_bar_config(disable=True)
+    pipe = load_pipeline(args.model, dtype=dtype, device=device)
 
     sae = SparseAutoencoder.load(args.sae).to(device).eval()
     cap = ActivationCapture(pipe.unet, CaptureConfig(sites=(args.site,),

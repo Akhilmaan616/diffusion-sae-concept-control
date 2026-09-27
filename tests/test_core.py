@@ -196,6 +196,85 @@ def test_capture_on_fake_unet():
           f"each {tuple(next(iter(got.values())).shape)} (cond half only)")
 
 
+def test_timestep_attribution_is_exact():
+    """Regression test for a bug the shard sizes exposed on a real run.
+
+    Taking the timestep from ``callback_on_step_end`` labels every activation
+    with the PREVIOUS step's t (the callback fires after the step) and the first
+    forward pass with a default. On a 25-step DDIM schedule that turns the true
+    bucket distribution 9/8/8 into 8/8/9 and mislabels every token by one step.
+
+    Reading the timestep from the UNet's own forward arguments is exact. This
+    test drives a fake UNet with the real SD1.5 DDIM grid and asserts the
+    recovered distribution matches the schedule, not the lagged version.
+    """
+    class Attn(nn.Module):
+        def __init__(self, c): super().__init__(); self.lin = nn.Linear(c, c)
+        def forward(self, x): return self.lin(x)
+
+    class Blk(nn.Module):
+        def __init__(self, c): super().__init__(); self.attn2 = Attn(c)
+        def forward(self, x): return self.attn2(x)
+
+    class Atn(nn.Module):
+        def __init__(self, c):
+            super().__init__(); self.transformer_blocks = nn.ModuleList([Blk(c)])
+        def forward(self, x): return self.transformer_blocks[0](x)
+
+    class Mid(nn.Module):
+        def __init__(self, c):
+            super().__init__(); self.attentions = nn.ModuleList([Atn(c)])
+        def forward(self, x): return self.attentions[0](x)
+
+    class FakeUNet(nn.Module):
+        """Mimics UNet2DConditionModel.forward(sample, timestep, ...)."""
+        def __init__(self, c=32):
+            super().__init__(); self.mid_block = Mid(c)
+        def forward(self, sample, timestep, encoder_hidden_states=None):
+            return self.mid_block(sample)
+
+    site = "mid_block.attentions.0.transformer_blocks.0.attn2"
+    unet = FakeUNet(32)
+    cap = ActivationCapture(unet, CaptureConfig(sites=(site,), tokens_per_pass=8))
+    cap.attach()
+
+    # The real SD1.5 grids at 25 steps, steps_offset=1.
+    ddim = [int(1000 / 25 * (25 - 1 - i)) + 1 for i in range(25)]
+    # PNDM/PLMS (what the Hub pipeline ships) repeats the second timestep.
+    pndm = ddim[:2] + [ddim[1]] + ddim[2:]
+    assert len(pndm) == 26 and pndm[:4] == [961, 921, 921, 881]
+
+    from collections import Counter
+    lagged_pndm = dict(Counter(bucket_of(t, (334.0, 667.0))
+                               for t in [999.0] + pndm[:-1]))
+    # Pinned to the real Kaggle run: shards of 51,200 / 51,200 / 64,000 tokens
+    # at 64 tokens x 100 batches = 8 / 8 / 10 passes. The lagged-PNDM model of
+    # the bug must reproduce exactly that, or the diagnosis is wrong.
+    assert lagged_pndm == {0: 8, 1: 8, 2: 10}, lagged_pndm
+
+    timesteps = ddim
+    for t in timesteps:
+        unet(torch.randn(2, 16, 32), torch.tensor(t))       # positional
+    got_pos = {k[1]: v.shape[0] // 8 for k, v in cap.pop().items()}
+
+    for t in timesteps:
+        unet(torch.randn(2, 16, 32), timestep=torch.tensor([t, t]))   # kwarg, batched
+    got_kw = {k[1]: v.shape[0] // 8 for k, v in cap.pop().items()}
+    cap.detach()
+
+    expected = dict(Counter(bucket_of(t, (334.0, 667.0)) for t in timesteps))
+    assert got_pos == expected, f"positional: {got_pos} != {expected}"
+    assert got_kw == expected, f"kwarg: {got_kw} != {expected}"
+    assert sum(expected.values()) == 25
+
+    lagged = dict(Counter(bucket_of(t, (334.0, 667.0))
+                          for t in [999.0] + timesteps[:-1]))
+    assert lagged != expected, "the lagged version should differ -- test is not probing anything"
+    print(f"  exact {dict(sorted(expected.items()))} vs "
+          f"lagged {dict(sorted(lagged.items()))} (the bug); both arg styles OK")
+    print(f"  lagged-PNDM model reproduces the observed Kaggle shards: {lagged_pndm}")
+
+
 def test_store_roundtrip_and_scaling():
     with tempfile.TemporaryDirectory() as td:
         w = ShardWriter(td, "site.a", 1, d_in=32)
@@ -274,6 +353,40 @@ def test_l1_mode_trains():
               f"L0 {s['final']['l0']:.1f} (topk reached EV 0.963 at L0 4)")
         assert s["final"]["l0"] < 16, "l1 failed to sparsify"
         assert s["final"]["explained_variance"] > 0.4
+
+
+def test_partial_checkpoint_detection_and_repair():
+    """Reproduces the real local cache layout on the Windows box: unet, vae,
+    text_encoder and tokenizer present, but no model_index.json and no
+    scheduler/ -- so plain from_pretrained fails. The loader must detect that,
+    resolve the snapshot sha directory, and be able to repair it idempotently.
+    """
+    from sae.loader import find_snapshot, inspect, write_missing_pipeline_files
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "models--runwayml--stable-diffusion-v1-5"
+        sha = "451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
+        snap = root / "snapshots" / sha
+        for d in ("unet", "vae", "text_encoder", "tokenizer"):
+            (snap / d).mkdir(parents=True)
+
+        for entry in (root, root / "snapshots", snap):
+            assert find_snapshot(entry).name == sha
+
+        rep = inspect(root)
+        assert rep["loadable_directly"] is False
+        assert rep["loadable_componentwise"] is True
+
+        written = write_missing_pipeline_files(root)
+        assert len(written) == 2
+        assert inspect(root)["loadable_directly"] is True
+        assert write_missing_pipeline_files(root) == []      # idempotent
+
+        cfg = json.loads((snap / "scheduler" / "scheduler_config.json").read_text())
+        assert cfg["beta_schedule"] == "scaled_linear"       # not the diffusers default
+        assert cfg["steps_offset"] == 1
+        assert cfg["set_alpha_to_one"] is False
+        print("  partial cache detected, repaired with SD1.5 scheduler config, idempotent")
 
 
 def test_save_load_roundtrip():

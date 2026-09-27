@@ -106,3 +106,20 @@ mirror is `stable-diffusion-v1-5/stable-diffusion-v1-5`.
 CLIP scoring deliberately uses ViT-B/32, not SD1.5's own ViT-L/14 text encoder.
 Scoring with the model's own conditioning encoder measures how well you
 satisfied its training objective, which is circular.
+
+## Local checkpoint (partial HuggingFace cache)
+
+`sae/loader.py` handles a cache that has real weights but no pipeline manifest:
+
+```bash
+python -m sae.loader "C:/Users/akhil/ife_thesis/models/models--runwayml--stable-diffusion-v1-5"
+python -m sae.loader "<same path>" --repair     # writes model_index.json + scheduler/
+```
+
+Without `--repair` the loader still works — it assembles the pipeline from
+components and reconstructs a DDIM scheduler from the published SD1.5 config
+(`scaled_linear` betas 0.00085→0.012, `steps_offset=1`,
+`set_alpha_to_one=False`). Those three values are not the diffusers defaults and
+getting them wrong produces subtly wrong samples rather than an error.
+
+Pass the cache path as `--model` to any pipeline script to run fully offline.
