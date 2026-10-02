@@ -112,6 +112,10 @@ def load_pipeline(model: str, dtype=torch.float16, device: str = "cuda",
     token splits -- 9/8/9 versus 9/8/8 -- and nothing would warn you.
     Pass ``scheduler="native"`` to keep whatever the checkpoint ships.
     """
+    if model == "__fake__":                      # tests only; see sae/fake_pipe.py
+        from .fake_pipe import FakePipe
+        return FakePipe()
+
     from diffusers import DDIMScheduler, StableDiffusionPipeline
 
     def _finish(pipe):

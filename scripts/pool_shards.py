@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Merge a site's per-bucket shards into one pooled shard.
+"""Define a pooled (all-timestep) shard for one site, without copying data.
 
     python scripts/pool_shards.py --acts data/acts \
         --site up_blocks.1.attentions.1.transformer_blocks.0.attn2
@@ -21,16 +21,29 @@ that bucket's timesteps. If the bucketed row wins clearly, per-timestep
 dictionaries are justified. If the rows tie, pooling is the better design (one
 SAE, more data per feature) and you should say so -- that is still a result.
 
-Token counts are balanced before pooling (each bucket truncated to the smallest)
-so the pooled SAE is not dominated by whichever bucket happened to get more
-passes from the scheduler.
+Two details:
+
+* The pooled shard is a manifest pointing at the bucket shards, not a copy.
+  Copying would duplicate ~8 GB and blow Kaggle's 20 GB working directory.
+* Each bucket contributes the same number of tokens (the smallest bucket's
+  count), so the pooled SAE is not tilted toward whichever bucket the scheduler
+  happened to visit more often.
+
+A fairness caveat to state when you report the table: by default the pooled SAE
+sees 3x the tokens of any single bucketed SAE, but has to spread the same number
+of features across three regimes. That is the real trade-off being tested, not
+a confound -- but say it explicitly.
 """
 
 import argparse
 import json
+import os
 from pathlib import Path
 
-import numpy as np
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sae.data import shard_slug
 
 
 def main():
@@ -41,30 +54,43 @@ def main():
     args = ap.parse_args()
 
     acts = Path(args.acts)
-    slug = args.site.replace(".", "_")
-    shards = sorted(acts.glob(f"{slug}__b[0-9].bin"))
-    if not shards:
-        raise SystemExit(f"no bucket shards for {args.site} in {acts}")
+    metas = []
+    for b in range(10):
+        mp = acts / f"{shard_slug(args.site, b)}.json"
+        if mp.exists():
+            metas.append(json.loads(mp.read_text()))
+    if len(metas) < 2:
+        raise SystemExit(f"need >=2 bucket shards for {args.site} in {acts}, found {len(metas)}")
 
-    metas = [json.loads(s.with_suffix(".json").read_text()) for s in shards]
     d_in = metas[0]["d_in"]
     assert all(m["d_in"] == d_in for m in metas)
-
     n_take = min(m["n_tokens"] for m in metas)
-    out_bin = acts / f"{slug}__pooled.bin"
-    total = 0
-    with open(out_bin, "wb") as f:
-        for s, m in zip(shards, metas):
-            arr = np.memmap(s, dtype=np.float16, mode="r").reshape(-1, d_in)
-            take = m["n_tokens"] if args.no_balance else n_take
-            f.write(np.asarray(arr[:take]).tobytes())
-            total += take
-            print(f"  bucket {m['bucket']}: {m['n_tokens']:,} available, {take:,} used")
 
-    (acts / f"{slug}__pooled.json").write_text(json.dumps(
-        {"site": args.site, "bucket": -1, "d_in": d_in, "n_tokens": total,
-         "dtype": "float16"}, indent=2))
-    print(f"wrote {out_bin} ({total:,} tokens)")
+    sources = []
+    for m in metas:
+        take = m["n_tokens"] if args.no_balance else n_take
+        # A bucket shard is either a real file or (after a multi-GPU merge) a
+        # manifest of files; expand to files and draw `take` tokens greedily.
+        srcs = m.get("sources") or [{"path": f"{shard_slug(args.site, m['bucket'])}.bin",
+                                     "n_take": m["n_tokens"]}]
+        remaining = take
+        for src in srcs:
+            if remaining <= 0:
+                break
+            n = min(remaining, int(src["n_take"]))
+            sources.append({"path": src["path"], "bucket": m["bucket"], "n_take": n})
+            remaining -= n
+        print(f"  bucket {m['bucket']}: {m['n_tokens']:,} available, {take:,} used "
+              f"({len(srcs)} file(s))")
+
+    out = acts / f"{shard_slug(args.site, 'pooled')}.json"
+    manifest = {"site": args.site, "bucket": -1, "d_in": d_in,
+                "n_tokens": sum(s["n_take"] for s in sources),
+                "dtype": "float16", "sources": sources}
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(manifest, indent=2))
+    os.replace(tmp, out)
+    print(f"wrote {out} ({manifest['n_tokens']:,} tokens, no data copied)")
 
 
 if __name__ == "__main__":

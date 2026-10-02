@@ -97,6 +97,9 @@ def main():
     ap.add_argument("--steps", type=int, default=25)
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--out", default="outputs/substitution.json")
+    ap.add_argument("--latent-cache", default="outputs/substitution_latents.pt",
+                    help="reuse the same clean latents across runs; the pooled-vs-"
+                         "bucketed table needs every cell evaluated on identical data")
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -106,9 +109,24 @@ def main():
     mod = get_module(pipe.unet, args.site)
 
     prompts = DISCOVERY[:args.n_prompts]
-    print(f"encoding {len(prompts)} latents...", flush=True)
-    latents, embeds = make_latents(pipe, prompts, args.steps, args.size,
-                                   args.seed, device)
+    cache = Path(args.latent_cache) if args.latent_cache else None
+    if cache is not None and cache.exists():
+        blob = torch.load(cache, map_location=device)
+        if blob.get("prompts") == prompts and blob.get("seed") == args.seed:
+            latents, embeds = blob["latents"].to(dtype), blob["embeds"].to(dtype)
+            print(f"reusing {len(prompts)} cached latents from {cache}", flush=True)
+        else:
+            latents = None
+    else:
+        latents = None
+    if latents is None:
+        print(f"encoding {len(prompts)} latents...", flush=True)
+        latents, embeds = make_latents(pipe, prompts, args.steps, args.size,
+                                       args.seed, device)
+        if cache is not None:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            torch.save({"prompts": prompts, "seed": args.seed,
+                        "latents": latents.cpu(), "embeds": embeds.cpu()}, cache)
 
     sched = pipe.scheduler
     T = sched.config.num_train_timesteps

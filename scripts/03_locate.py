@@ -52,9 +52,9 @@ def collect(pipe, cap, prompts, site, bucket, batch=4, steps=25, guidance=7.5,
     chunks = []
     for i in range(0, len(prompts), batch):
         cap.reset(); cap.set_timestep(999.0)
+        # Only activations are needed here, so skip the VAE decode.
         pipe(prompts[i:i + batch], num_inference_steps=steps, guidance_scale=guidance,
-             height=size, width=size, generator=gen,
-             callback_on_step_end=cap.diffusers_callback)
+             height=size, width=size, generator=gen, output_type="latent")
         got = cap.pop()
         if (site, bucket) in got:
             chunks.append(got[(site, bucket)])

@@ -50,6 +50,11 @@ class TrainConfig:
     device: str = "cuda"
     grad_clip: float = 1.0
     seed: int = 0
+    # Mixed precision. A T4 has fp16 tensor cores but no bf16 and no TF32, so in
+    # fp32 it runs these large matmuls on plain CUDA cores. Autocast to fp16 with
+    # a gradient scaler is the single biggest speed-up available on that card.
+    # Parameters and optimiser state stay fp32; only the matmuls drop precision.
+    amp: bool = True
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -69,9 +74,11 @@ def feature_density(sae: SparseAutoencoder, store: ActivationStore,
     """Firing rate per latent, measured over a fresh sample."""
     counts = torch.zeros(sae.cfg.d_hidden, device=next(sae.parameters()).device)
     total = 0
+    use_amp = counts.device.type == "cuda"
     for _ in range(n_batches):
         x = store.batch(batch_size).to(counts.device)
-        codes = sae.encode(x)
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+            codes = sae.encode(x)
         counts += (codes > 0).float().sum(dim=0)
         total += x.shape[0]
     return counts / max(1, total)
@@ -114,6 +121,10 @@ def train_sae(store: ActivationStore, sae_cfg: SAEConfig, cfg: TrainConfig,
 
     target_l1 = sae.cfg.l1_coef
     opt = torch.optim.Adam(sae.parameters(), lr=cfg.lr, betas=(0.9, 0.999), eps=1e-8)
+    use_amp = bool(cfg.amp) and str(device).startswith("cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    if verbose:
+        print(f"device {device} | mixed precision {'fp16' if use_amp else 'off'}")
 
     history: list[dict] = []
     t0 = time.time()
@@ -126,14 +137,21 @@ def train_sae(store: ActivationStore, sae_cfg: SAEConfig, cfg: TrainConfig,
             sae.cfg.l1_coef = target_l1 * ramp
 
         x = store.batch(cfg.batch_size)
-        out = sae(x)
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+            out = sae(x)
 
         opt.zero_grad(set_to_none=True)
-        out.loss.backward()
+        scaler.scale(out.loss).backward()
+        # Unscale BEFORE touching gradients: the decoder-norm projection and the
+        # clipping threshold are defined on true gradients, not loss-scaled ones.
+        # If this step overflowed, unscale_ records it and scaler.step skips the
+        # update, so the projection running on inf values here is harmless.
+        scaler.unscale_(opt)
         if sae.cfg.normalize_decoder:
             sae.set_decoder_norm_grad_()
         torch.nn.utils.clip_grad_norm_(sae.parameters(), cfg.grad_clip)
-        opt.step()
+        scaler.step(opt)
+        scaler.update()
         if sae.cfg.normalize_decoder:
             sae.normalize_decoder_()
 
@@ -163,6 +181,7 @@ def train_sae(store: ActivationStore, sae_cfg: SAEConfig, cfg: TrainConfig,
         },
         "n_never_fired": int((density == 0).sum()),
         "wall_clock_s": round(time.time() - t0, 1),
+        "mixed_precision": use_amp,
     }
     (out_dir / "history.json").write_text(json.dumps(history, indent=2))
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))

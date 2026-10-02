@@ -91,7 +91,9 @@ tests/           12 tests, all on synthetic data — no GPU or weights needed
 ## Tests
 
 ```bash
-python tests/test_core.py     # 12/12, CPU, ~2 min
+python tests/test_core.py      # 14 core tests
+python tests/test_stages.py    # 4 atlas/substitution tests
+python tests/test_pipeline.py  # 6 resume/merge/orchestrator tests
 ```
 
 The one that matters is `test_sae_recovers_known_dictionary`: data is generated
@@ -106,6 +108,38 @@ mirror is `stable-diffusion-v1-5/stable-diffusion-v1-5`.
 CLIP scoring deliberately uses ViT-B/32, not SD1.5's own ViT-L/14 text encoder.
 Scoring with the model's own conditioning encoder measures how well you
 satisfied its training objective, which is circular.
+
+## Running unattended (Kaggle background run, Colab, any terminal)
+
+```bash
+python scripts/run_pipeline.py --root /kaggle/working/project_b
+```
+
+Runs every stage end to end: prefetch, capture, merge, pool, train, locate, atlas,
+substitute, amplify, erase, report. Everything lands in `outputs/REPORT.md`.
+
+- **Uses both GPUs** when present. Capture runs one process per GPU with different
+  seeds, then `merge_shards.py` joins them. The four SAEs train two per GPU.
+- **Resumable at three levels.** Each stage writes `state/<stage>.done`. Capture
+  checkpoints after every batch, so a killed run resumes **byte-identically**, and a
+  half-written batch is truncated away rather than kept twice. Training skips any
+  SAE that's already saved. Re-run the same command to continue.
+- **No data copying.** Merged and pooled shards are JSON manifests that point at the
+  per-GPU files, which keeps ~8 GB of activations inside Kaggle's 20 GB working dir.
+- **fp16 mixed precision** for SAE training. A T4 has fp16 tensor cores but no bf16 or
+  TF32, so this is its biggest available speed-up. `--no-amp` falls back to fp32.
+- **Capture skips the VAE decode** (`output_type="latent"`), since nothing needs pixels.
+
+On Kaggle use *Save Version → Save & Run All*: it runs in the background with the
+browser closed, with a 12 h limit (the GPU quota is 30 h/week). Free Colab has no
+background execution and a single GPU. The notebook keeps results on Drive there,
+so only an interruption during capture or training costs a redo.
+
+Tests for all of this run on CPU with a fake pipeline (`--model __fake__`):
+
+```bash
+python tests/test_core.py && python tests/test_stages.py && python tests/test_pipeline.py   # 24 tests
+```
 
 ## Local checkpoint (partial HuggingFace cache)
 
