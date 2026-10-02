@@ -110,7 +110,11 @@ class FakePipe:
         if isinstance(prompts, str):
             prompts = [prompts]
         b = len(prompts)
-        x = torch.randn(2 * b, self.seq, self.d, generator=generator)
+        # Draw noise on whatever device the caller's generator lives on -- the
+        # capture script makes a CUDA generator whenever a GPU is visible -- then
+        # run the toy UNet on CPU, where results are bit-deterministic.
+        dev = generator.device if generator is not None else torch.device("cpu")
+        x = torch.randn(2 * b, self.seq, self.d, generator=generator, device=dev).cpu()
         for t in self.scheduler.grid(num_inference_steps):
             x = self.unet(x, torch.tensor(t)).sample * 0.5
         return SimpleNamespace(images=[None] * b)
