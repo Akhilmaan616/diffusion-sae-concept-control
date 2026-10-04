@@ -54,6 +54,9 @@ def generate(pipe, prompts, seed, steps=25, guidance=7.5, size=512):
 
 
 def main():
+    # Inference only. Without this, SAE outputs carry autograd graphs: memory is
+    # wasted and anything that calls .numpy() on them crashes (stage 5 did).
+    torch.set_grad_enabled(False)
     ap = argparse.ArgumentParser()
     ap.add_argument("--sae", required=True)
     ap.add_argument("--locate", default="outputs/locate.json")
@@ -71,14 +74,18 @@ def main():
     args = ap.parse_args()
 
     from sae.loader import load_pipeline
-    from transformers import CLIPModel, CLIPProcessor
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device == "cuda" else torch.float32
     pipe = load_pipeline(args.model, dtype=dtype, device=device)
 
-    scorer = ClipScorer(CLIPModel.from_pretrained(args.clip).to(device).eval(),
-                        CLIPProcessor.from_pretrained(args.clip), device)
+    if args.clip == "__fake__":                  # tests only; see sae/fake_pipe.py
+        from sae.fake_pipe import FakeClipScorer
+        scorer = FakeClipScorer()
+    else:
+        from transformers import CLIPModel, CLIPProcessor
+        scorer = ClipScorer(CLIPModel.from_pretrained(args.clip).to(device).eval(),
+                            CLIPProcessor.from_pretrained(args.clip), device)
 
     sae = SparseAutoencoder.load(args.sae).to(device).eval()
     cand = json.loads(Path(args.locate).read_text())["candidates"]

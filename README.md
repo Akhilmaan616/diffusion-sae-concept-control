@@ -93,7 +93,7 @@ tests/           12 tests, all on synthetic data — no GPU or weights needed
 ```bash
 python tests/test_core.py      # 14 core tests
 python tests/test_stages.py    # 4 atlas/substitution tests
-python tests/test_pipeline.py  # 6 resume/merge/orchestrator tests
+python tests/test_pipeline.py  # 8 resume/merge/orchestrator/end-to-end tests
 ```
 
 The one that matters is `test_sae_recovers_known_dictionary`: data is generated
@@ -138,7 +138,7 @@ so only an interruption during capture or training costs a redo.
 Tests for all of this run on CPU with a fake pipeline (`--model __fake__`):
 
 ```bash
-python tests/test_core.py && python tests/test_stages.py && python tests/test_pipeline.py   # 24 tests
+python tests/test_core.py && python tests/test_stages.py && python tests/test_pipeline.py   # 26 tests
 ```
 
 ## Local checkpoint (partial HuggingFace cache)

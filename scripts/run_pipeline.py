@@ -259,7 +259,7 @@ def st_erase(a, P):
 def st_report(a, P):
     # Describe what was actually run (from the artifacts), not this invocation's flags.
     idx = read_json(P["runs"] / "index.json")
-    cfg0 = read_json(Path(idx[0]["run_dir"]) / "summary.json")["sae_cfg"] if idx else {}
+    cfg0 = read_json(P["runs"] / idx[0]["shard"] / "summary.json")["sae_cfg"] if idx else {}
     n_img = sum(read_json(p)["images_done"] for p in P["acts"].glob("gpu*/progress.json"))
     lines = ["# Project B — results", "",
              f"Model `{a.model}` · site `{MAIN_SITE}` · expansion {cfg0.get('expansion', '?')}"
@@ -269,7 +269,7 @@ def st_report(a, P):
               "| shard | bucket | tokens | tokens/feature | EV | L0 | dead | never fired |",
               "|---|---|---|---|---|---|---|---|"]
     for r in idx:
-        d_hidden = read_json(Path(r["run_dir"]) / "summary.json")["sae_cfg"]["d_hidden"]
+        d_hidden = read_json(P["runs"] / r["shard"] / "summary.json")["sae_cfg"]["d_hidden"]
         lines.append(f"| {r['shard']} | {r['bucket']} | {r['n_tokens']:,} | "
                      f"{r['n_tokens'] / d_hidden:.0f} | {r['EV']:.3f} | {r['L0']:.1f} | "
                      f"{r['dead']:.3f} | {r['never_fired']:,} |")
@@ -329,6 +329,28 @@ def st_report(a, P):
 FUNCS = {name: globals()[f"st_{name}"] for name in STAGES}
 
 
+def resume_from(src: Path, P) -> None:
+    """Copy a previous run's progress into this (empty) root.
+
+    SAEs, outputs, logs and stage markers are always copied. The ~8 GB of
+    activations are copied only if training had not finished -- every stage
+    after training works from the saved SAEs and never touches them.
+    """
+    import shutil
+    if not (src / "state").is_dir():
+        log(f"resume-from: {src} has no state/ -- starting fresh")
+        return
+    done = sorted(p.stem for p in (src / "state").glob("*.done"))
+    log(f"resuming from {src}: finished stages {done}")
+    for sub in ("runs", "outputs", "state", "logs"):
+        if (src / sub).is_dir():
+            shutil.copytree(src / sub, P[sub if sub != "outputs" else "out"],
+                            dirs_exist_ok=True)
+    if "train" not in done and (src / "data").is_dir():
+        log("training had not finished -- copying activations too")
+        shutil.copytree(src / "data", P["acts"], dirs_exist_ok=True)
+
+
 # ---------------------------------------------------------------------- main
 
 def main():
@@ -354,6 +376,9 @@ def main():
     ap.add_argument("--only", nargs="*", default=None, help="run just these stages")
     ap.add_argument("--redo", nargs="*", default=[], help="force these stages to rerun")
     ap.add_argument("--gpus", type=int, default=None, help="override detected GPU count")
+    ap.add_argument("--resume-from", default=None,
+                    help="a previous run's root (e.g. an attached Kaggle notebook output); "
+                         "copied in if this root has no finished stages yet")
     ap.add_argument("--no-amp", action="store_true",
                     help="train in fp32 (use only if fp16 training produces NaNs)")
     a = ap.parse_args()
@@ -366,6 +391,9 @@ def main():
         P[k].mkdir(parents=True, exist_ok=True)
     a.gpus = gpu_count() if a.gpus is None else a.gpus
     log(f"root {root} | acts {acts} | GPUs {a.gpus}")
+
+    if a.resume_from and not any(P["state"].glob("*.done")):
+        resume_from(Path(a.resume_from), P)
 
     # If training hasn't finished but the activations have vanished (e.g. a Colab
     # VM was recycled while results live on Drive), the capture/merge/pool

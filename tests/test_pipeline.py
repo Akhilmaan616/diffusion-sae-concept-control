@@ -199,6 +199,67 @@ def test_lost_activations_trigger_recapture():
         print("  missing activations detected; capture/merge/pool re-ran automatically")
 
 
+def test_all_eleven_stages_end_to_end():
+    """Every stage, in order, through the real scripts -- including the four
+    (atlas, substitute, amplify, erase) that only run after training. This is
+    the test that would have caught the atlas crash on Kaggle (autograd graph
+    left on SAE codes, then .numpy()) before a GPU run reached it."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "proj"
+        r = _run(["scripts/run_pipeline.py", "--root", str(root), "--model", "__fake__",
+                  "--clip", "__fake__", "--gpus", "0", "--n-images", "16",
+                  "--capture-batch", "4", "--corpus", "32", "--expansion", "2",
+                  "--k", "4", "--train-steps", "60", "--train-batch", "256",
+                  "--locate-repeats", "1"])
+        stages = ["prefetch", "capture", "merge", "pool", "train", "locate", "atlas",
+                  "substitute", "amplify", "erase", "report"]
+        missing = [s for s in stages if not (root / "state" / f"{s}.done").exists()]
+        assert not missing, f"stages not completed: {missing}\n{r.stdout[-1500:]}"
+
+        out = root / "outputs"
+        atlas = json.loads((out / "atlas" / "atlas.json").read_text())
+        assert atlas["features"] and all((out / "atlas" / f["image"]).exists()
+                                         for f in atlas["features"])
+        table = json.loads((out / "substitution_table.json").read_text())
+        assert sorted(table) == sorted(f"{k}_b{b}" for k in ("bucketed", "pooled")
+                                       for b in (0, 1, 2))
+        for mode in ("amplify", "erase"):
+            rep = json.loads((out / f"steer_{mode}.json").read_text())["report"]
+            assert rep, f"empty {mode} report"
+        report = (out / "REPORT.md").read_text()
+        for section in ("## SAE training", "## Faithfulness", "## Candidate concept",
+                        "## Causal test: amplify", "## Causal test: erase"):
+            assert section in report, section
+        print(f"  all 11 stages completed; atlas {len(atlas['features'])} sheets, "
+              f"6-cell substitution table, both steering reports, REPORT.md complete")
+
+
+def test_resume_from_previous_output_restarts_at_failed_stage():
+    """The Kaggle situation: a run finished capture..locate, then failed at atlas.
+    A new session seeded with --resume-from that output must skip everything up
+    to locate, not copy the activations (training is done), and finish the rest."""
+    import shutil
+    with tempfile.TemporaryDirectory() as td:
+        old, new = Path(td) / "old", Path(td) / "new"
+        common = ["--model", "__fake__", "--clip", "__fake__", "--gpus", "0",
+                  "--n-images", "16", "--capture-batch", "4", "--corpus", "32",
+                  "--expansion", "2", "--k", "4", "--train-steps", "60",
+                  "--train-batch", "256", "--locate-repeats", "1"]
+        _run(["scripts/run_pipeline.py", "--root", str(old), *common,
+              "--only", "prefetch", "capture", "merge", "pool", "train", "locate"])
+
+        r = _run(["scripts/run_pipeline.py", "--root", str(new), "--resume-from", str(old),
+                  *common])
+        for s in ("capture", "merge", "pool", "train", "locate"):
+            assert f"skip {s} (done)" in r.stdout, s
+        assert "copying activations" not in r.stdout
+        assert not (new / "data").exists(), "activations were copied needlessly"
+        for s in ("atlas", "substitute", "amplify", "erase", "report"):
+            assert (new / "state" / f"{s}.done").exists(), s
+        print("  seeded from a run that stopped after locate: skipped 5 stages, "
+              "copied no activations, finished atlas..report")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

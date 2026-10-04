@@ -62,6 +62,9 @@ def collect(pipe, cap, prompts, site, bucket, batch=4, steps=25, guidance=7.5,
 
 
 def main():
+    # Inference only. Without this, SAE outputs carry autograd graphs: memory is
+    # wasted and anything that calls .numpy() on them crashes (stage 5 did).
+    torch.set_grad_enabled(False)
     ap = argparse.ArgumentParser()
     ap.add_argument("--sae", required=True)
     ap.add_argument("--model", default="stable-diffusion-v1-5/stable-diffusion-v1-5")

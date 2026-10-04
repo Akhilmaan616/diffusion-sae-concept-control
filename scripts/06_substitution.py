@@ -83,6 +83,9 @@ def make_latents(pipe, prompts, steps, size, seed, device):
 
 
 def main():
+    # Inference only. Without this, SAE outputs carry autograd graphs: memory is
+    # wasted and anything that calls .numpy() on them crashes (stage 5 did).
+    torch.set_grad_enabled(False)
     ap = argparse.ArgumentParser()
     ap.add_argument("--sae", required=True)
     ap.add_argument("--model", default="stable-diffusion-v1-5/stable-diffusion-v1-5")
@@ -146,8 +149,9 @@ def main():
             return output
         state["n_hit"] += 1
         if state["mode"] == "substituted":
-            xf = x.float() * args.act_scale
-            new = sae.decode(sae.encode(xf)) / args.act_scale
+            sae_dev = next(sae.parameters()).device
+            xf = x.float().to(sae_dev) * args.act_scale
+            new = (sae.decode(sae.encode(xf)) / args.act_scale).to(x.device)
         else:                                     # ablated -> spatial mean
             new = x.float().mean(dim=1, keepdim=True).expand_as(x)
         new = new.to(x.dtype)

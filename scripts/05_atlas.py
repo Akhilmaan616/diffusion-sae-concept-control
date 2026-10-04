@@ -109,6 +109,7 @@ class SpatialCapture:
 def overlay(img, heat, alpha=0.55):
     """Red-hot overlay of a [h, w] activation map on a PIL image."""
     from PIL import Image
+    heat = heat.detach().float().cpu()
     h = heat - heat.min()
     h = h / max(float(h.max()), 1e-8)
     hm = Image.fromarray((h.numpy() * 255).astype(np.uint8)).resize(img.size, Image.BICUBIC)
@@ -136,6 +137,9 @@ def contact_sheet(rows, pad=6):
 
 
 def main():
+    # Inference only. Without this, SAE outputs carry autograd graphs: memory is
+    # wasted and anything that calls .numpy() on them crashes (stage 5 did).
+    torch.set_grad_enabled(False)
     ap = argparse.ArgumentParser()
     ap.add_argument("--sae", required=True)
     ap.add_argument("--model", default="stable-diffusion-v1-5/stable-diffusion-v1-5")
