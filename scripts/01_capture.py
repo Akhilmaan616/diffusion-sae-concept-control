@@ -125,9 +125,9 @@ def main():
         truncate_shard(meta_path.with_suffix(".bin"), meta["d_in"], n)
 
     # ---------------------------------------------------------------- model
-    from sae.loader import load_pipeline
+    from sae.loader import load_pipeline, pick_device
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pick_device(args.model)
     dtype = torch.float16 if device == "cuda" else torch.float32
     pipe = load_pipeline(args.model, dtype=dtype, device=device)
 

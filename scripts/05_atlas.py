@@ -43,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sae.model import SparseAutoencoder
 from sae.hooks import get_module, bucket_of
-from sae.loader import load_pipeline
+from sae.loader import load_pipeline, pick_device
 from sae.prompts import DISCOVERY, PROBE
 
 
@@ -157,7 +157,7 @@ def main():
     ap.add_argument("--out", default="outputs/atlas")
     args = ap.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pick_device(args.model)
     dtype = torch.float16 if device == "cuda" else torch.float32
     pipe = load_pipeline(args.model, dtype=dtype, device=device)
     sae = SparseAutoencoder.load(args.sae).to(device).eval()

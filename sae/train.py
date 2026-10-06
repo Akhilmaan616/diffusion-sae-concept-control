@@ -74,10 +74,11 @@ def feature_density(sae: SparseAutoencoder, store: ActivationStore,
     """Firing rate per latent, measured over a fresh sample."""
     counts = torch.zeros(sae.cfg.d_hidden, device=next(sae.parameters()).device)
     total = 0
-    use_amp = counts.device.type == "cuda"
+    dev_type = counts.device.type
+    use_amp = dev_type == "cuda"
     for _ in range(n_batches):
         x = store.batch(batch_size).to(counts.device)
-        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+        with torch.autocast(device_type=dev_type, dtype=torch.float16, enabled=use_amp):
             codes = sae.encode(x)
         counts += (codes > 0).float().sum(dim=0)
         total += x.shape[0]
@@ -121,8 +122,11 @@ def train_sae(store: ActivationStore, sae_cfg: SAEConfig, cfg: TrainConfig,
 
     target_l1 = sae.cfg.l1_coef
     opt = torch.optim.Adam(sae.parameters(), lr=cfg.lr, betas=(0.9, 0.999), eps=1e-8)
-    use_amp = bool(cfg.amp) and str(device).startswith("cuda")
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    dev_type = "cuda" if str(device).startswith("cuda") else "cpu"
+    use_amp = bool(cfg.amp) and dev_type == "cuda"
+    # Name the device actually in use: constructing CUDA autocast/scaler objects
+    # on a CPU run touches the CUDA runtime even when they are disabled.
+    scaler = torch.amp.GradScaler(dev_type, enabled=use_amp)
     if verbose:
         print(f"device {device} | mixed precision {'fp16' if use_amp else 'off'}")
 
@@ -137,7 +141,7 @@ def train_sae(store: ActivationStore, sae_cfg: SAEConfig, cfg: TrainConfig,
             sae.cfg.l1_coef = target_l1 * ramp
 
         x = store.batch(cfg.batch_size)
-        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+        with torch.autocast(device_type=dev_type, dtype=torch.float16, enabled=use_amp):
             out = sae(x)
 
         opt.zero_grad(set_to_none=True)

@@ -59,6 +59,21 @@ SD15_SCHEDULER_CONFIG = {
 HUB_MIRROR = "stable-diffusion-v1-5/stable-diffusion-v1-5"
 
 
+def pick_device(model: str) -> str:
+    """Where a script should put tensors for this model.
+
+    The test-only fake pipeline computes on CPU. If the scripts sent tensors to
+    the GPU whenever one was visible, every test run on a GPU host (Kaggle) had
+    a CPU model fed GPU tensors -- a split the real pipeline never has, and the
+    source of two Kaggle-only test failures. Fake model => CPU everywhere, so the
+    tests exercise the logic; the real run exercises the GPU.
+    """
+    import torch
+    if model == "__fake__":
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 def find_snapshot(path: str | Path) -> Path:
     """Resolve an HF cache directory to the actual snapshot folder.
 
@@ -123,6 +138,13 @@ def load_pipeline(model: str, dtype=torch.float16, device: str = "cuda",
             pipe.scheduler = DDIMScheduler(**SD15_SCHEDULER_CONFIG)
         pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=True)
+        # Decode one image at a time. The steering stage decodes batches of 8 at
+        # 512 px, and the VAE decoder's full-resolution activations are the
+        # largest tensors in the whole pipeline -- slicing removes that peak at
+        # negligible speed cost on a 16 GB T4.
+        vae = getattr(pipe, "vae", None)
+        if vae is not None and hasattr(vae, "enable_slicing"):
+            vae.enable_slicing()
         if verbose:
             print(f"scheduler: {type(pipe.scheduler).__name__}")
         return pipe

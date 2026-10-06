@@ -54,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sae.model import SparseAutoencoder
 from sae.hooks import get_module, bucket_of
-from sae.loader import load_pipeline
+from sae.loader import load_pipeline, pick_device
 from sae.prompts import DISCOVERY
 
 
@@ -105,7 +105,7 @@ def main():
                          "bucketed table needs every cell evaluated on identical data")
     args = ap.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pick_device(args.model)
     dtype = torch.float16 if device == "cuda" else torch.float32
     pipe = load_pipeline(args.model, dtype=dtype, device=device)
     sae = SparseAutoencoder.load(args.sae).to(device).eval()
@@ -114,7 +114,7 @@ def main():
     prompts = DISCOVERY[:args.n_prompts]
     cache = Path(args.latent_cache) if args.latent_cache else None
     if cache is not None and cache.exists():
-        blob = torch.load(cache, map_location=device)
+        blob = torch.load(cache, map_location="cpu")
         if blob.get("prompts") == prompts and blob.get("seed") == args.seed:
             latents, embeds = blob["latents"].to(dtype), blob["embeds"].to(dtype)
             print(f"reusing {len(prompts)} cached latents from {cache}", flush=True)
@@ -163,6 +163,12 @@ def main():
     # the comparison is contaminated by sampling variance and the differences
     # you are looking for are smaller than the noise.
     torch.manual_seed(args.seed)
+    # One device for everything the UNet consumes, whichever path produced the
+    # latents (fresh VAE encode or the cache). Before this, cached latents were
+    # loaded onto `device` while fresh ones stayed wherever the VAE put them, so
+    # the two paths could disagree -- which crashed the second substitution run.
+    unet_dev = next(pipe.unet.parameters()).device
+    latents, embeds = latents.to(unet_dev), embeds.to(unet_dev)
     noises = [torch.randn_like(latents) for _ in range(args.n_timesteps)]
     if args.all_buckets:
         ts = [int(T * (i + 0.5) / args.n_timesteps) for i in range(args.n_timesteps)]
@@ -178,10 +184,10 @@ def main():
             total = 0.0
             for noise, t in zip(noises, ts):
                 state["t"] = float(t)
-                tt = torch.full((latents.shape[0],), t, device=device, dtype=torch.long)
+                tt = torch.full((latents.shape[0],), t, device=unet_dev, dtype=torch.long)
                 noisy = sched.add_noise(latents, noise, tt)
                 pred = pipe.unet(noisy, tt, encoder_hidden_states=embeds).sample
-                total += float(F.mse_loss(pred.float(), noise.float()))
+                total += float(F.mse_loss(pred.float(), noise.float().to(pred.device)))
             results[mode] = total / len(ts)
             print(f"{mode:<13} loss {results[mode]:.6f}   "
                   f"(hooked {state['n_hit']}, skipped {state['n_skip']})", flush=True)
