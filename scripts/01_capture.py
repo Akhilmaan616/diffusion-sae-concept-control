@@ -12,13 +12,16 @@ budget on *images* (which is what adds diversity):
     tokens per (site, bucket) ~= n_images * tokens_per_image_per_pass * passes_in_bucket
 
 At up_blocks.1 (16x16 = 256 tokens per image per pass) with 25 DDIM steps the
-three buckets get 9 / 8 / 8 passes, so 500 images give ~1.0-1.15M tokens per
-bucket: about 100 tokens per feature for a 10,240-feature dictionary. Storage is
-tokens * d_in * 2 bytes, ~8 GB for that one 1280-wide site.
+three buckets get 9 / 8 / 8 passes.
 
-``--tokens-per-pass`` counts per *batch* forward pass, not per image: with
-``--batch 8`` the conditional half holds 4 x 256 = 1024 tokens, so 1024 keeps
-everything at this site.
+``--tokens-per-pass`` counts per *batch* forward pass, not per image. Under
+classifier-free guidance the UNet sees [uncond, cond], and we keep only the
+conditional half: with ``--batch 8`` that is 8 x 256 = 2048 tokens, so the
+default 1024 keeps HALF of them (a random subset each pass). Run 1 was sized on
+the wrong figure (4 x 256): 500 images gave ~0.5M tokens per bucket, about 50
+tokens per feature for a 10,240-feature dictionary, not the ~100 planned.
+Run 2 uses 1000 images at 1024/pass: ~1M tokens per bucket, ~100 per feature.
+Storage is tokens * d_in * 2 bytes, ~2.6 GB per bucket at a 1280-wide site.
 
 SPEED
 

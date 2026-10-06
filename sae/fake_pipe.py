@@ -155,6 +155,14 @@ class FakePipe:
         self._calls = 0
         self._crash_after = int(os.environ.get("SAE_FAKE_CRASH_AFTER", "-1"))
 
+    def _prompt_vec(self, prompt: str) -> torch.Tensor:
+        import zlib
+        g = torch.Generator().manual_seed(zlib.crc32(prompt.encode()))
+        v = torch.zeros(self.d)
+        idx = torch.randperm(self.d, generator=g)[:4]
+        v[idx] = 1.5
+        return v
+
     def set_progress_bar_config(self, **kw):
         pass
 
@@ -175,7 +183,13 @@ class FakePipe:
         # run the toy UNet on CPU, where results are bit-deterministic.
         dev = generator.device if generator is not None else torch.device("cpu")
         x = torch.randn(2 * b, self.seq, self.d, generator=generator, device=dev).cpu()
+        # Make the conditional half depend on the prompt (deterministically --
+        # crc32, not hash(), which is salted per process). Without this every
+        # prompt with the same seed gave identical activations, so the atlas had
+        # no selective features to draw once the site moved to the residual stream.
+        cond = torch.stack([self._prompt_vec(p) for p in prompts])       # [b, d]
         for t in self.scheduler.grid(num_inference_steps):
+            x[b:] = x[b:] + cond[:, None, :]
             x = self.unet(x, torch.tensor(t)).sample * 0.5
         if output_type == "latent":
             return SimpleNamespace(images=x[b:])

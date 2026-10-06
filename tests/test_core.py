@@ -402,6 +402,36 @@ def test_save_load_roundtrip():
         print("  save/load identical")
 
 
+def test_add_mode_and_act_scale():
+    """Run-1 bugs, pinned. (1) ``add`` must move EVERY position by exactly
+    value * decoder row -- including positions where the feature was off, which
+    ``clamp`` never touched. (2) ``act_scale`` must be applied on the way in and
+    undone on the way out: the edit lands in raw units as value * W_dec / scale,
+    and an empty-effect edit stays the identity at any scale."""
+    torch.manual_seed(0)
+    sae = SparseAutoencoder(SAEConfig(d_in=32, expansion=4, k=6))
+    sae.normalize_decoder_()
+    x = torch.randn(1, 10, 32)
+    f, v, scale = 5, 2.0, 7.5
+
+    out = SteeringHook(sae, [SteerSpec(feature=f, mode="add", value=v)],
+                       cond_only=False, act_scale=scale)._hook(None, None, x)
+    expected = x + v * sae.W_dec[f].detach() / scale
+    err = (out - expected).abs().max()
+    assert err < 1e-4, f"add edit off by {err}"
+
+    ident = SteeringHook(sae, [SteerSpec(feature=f, mode="scale", value=1.0)],
+                         cond_only=False, act_scale=scale)._hook(None, None, x)
+    assert (ident - x).abs().max() < 1e-4
+
+    # The scale changes WHICH features TopK selects -- the reason it matters.
+    raw = sae.encode(x.reshape(-1, 32)) > 0
+    norm = sae.encode(x.reshape(-1, 32) * scale) > 0
+    differ = (raw != norm).any(dim=1).float().mean().item()
+    print(f"  add edit exact to {err:.1e}; identity holds at scale {scale}; "
+          f"TopK support differs on {100 * differ:.0f}% of tokens without the scale")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

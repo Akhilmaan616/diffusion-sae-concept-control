@@ -51,6 +51,11 @@ def main():
     ap.add_argument("--acts", default="data/acts")
     ap.add_argument("--site", required=True)
     ap.add_argument("--no-balance", action="store_true")
+    ap.add_argument("--matched", action="store_true",
+                    help="size the pooled shard like ONE bucket (each bucket "
+                         "contributes a third), written as bucket -2 / 'pooled_matched'. "
+                         "Separates 'pooling helps' from 'more data helps': run 1's "
+                         "pooled SAE saw 3x the tokens of each bucketed SAE")
     args = ap.parse_args()
 
     acts = Path(args.acts)
@@ -65,6 +70,8 @@ def main():
     d_in = metas[0]["d_in"]
     assert all(m["d_in"] == d_in for m in metas)
     n_take = min(m["n_tokens"] for m in metas)
+    if args.matched:
+        n_take //= len(metas)
 
     sources = []
     for m in metas:
@@ -83,8 +90,9 @@ def main():
         print(f"  bucket {m['bucket']}: {m['n_tokens']:,} available, {take:,} used "
               f"({len(srcs)} file(s))")
 
-    out = acts / f"{shard_slug(args.site, 'pooled')}.json"
-    manifest = {"site": args.site, "bucket": -1, "d_in": d_in,
+    tag, bucket_id = ("pooled_matched", -2) if args.matched else ("pooled", -1)
+    out = acts / f"{shard_slug(args.site, tag)}.json"
+    manifest = {"site": args.site, "bucket": bucket_id, "d_in": d_in,
                 "n_tokens": sum(s["n_take"] for s in sources),
                 "dtype": "float16", "sources": sources}
     tmp = out.with_suffix(".json.tmp")

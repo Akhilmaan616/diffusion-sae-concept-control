@@ -45,7 +45,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 PY = sys.executable
-MAIN_SITE = "up_blocks.1.attentions.1.transformer_blocks.0.attn2"
+ATTN2_SITE = "up_blocks.1.attentions.1.transformer_blocks.0.attn2"   # run 1
+RESIDUAL_SITE = "up_blocks.1.attentions.1.transformer_blocks.0"       # run 2 default
 STAGES = ["prefetch", "capture", "merge", "pool", "train", "locate", "atlas",
           "substitute", "amplify", "erase", "report"]
 
@@ -127,8 +128,11 @@ def st_prefetch(a, P):
 
 def st_capture(a, P):
     import shutil
-    # Main site: 256 tokens/image/pass, d=1280, fp16. Other sites roughly double it.
-    est = a.n_images * 256 * a.diffusion_steps * 1280 * 2 * (2.2 if a.all_sites else 1.0)
+    # 256 tokens per image per pass at a 16x16 site, of which tokens_per_pass are
+    # kept per batch call (the conditional half of a batch holds batch x 256).
+    keep = min(1.0, a.tokens_per_pass / (a.capture_batch * 256))
+    est = (a.n_images * 256 * keep * a.diffusion_steps * 1280 * 2
+           * (2.2 if a.all_sites else 1.0))
     P["acts"].mkdir(parents=True, exist_ok=True)
     free = shutil.disk_usage(P["acts"]).free
     log(f"capture needs ~{est / 1e9:.1f} GB; {free / 1e9:.1f} GB free at {P['acts']}")
@@ -144,9 +148,12 @@ def st_capture(a, P):
                 "--steps", str(a.diffusion_steps), "--batch", str(a.capture_batch),
                 "--tokens-per-pass", str(a.tokens_per_pass),
                 "--corpus", str(a.corpus), "--seed", str(i)]
-        argv += ["--all-sites"] if a.all_sites else ["--sites", MAIN_SITE]
+        argv += ["--all-sites"] if a.all_sites else ["--sites", a.site]
         cmds.append((argv, gpu_env(i, a.gpus), f"[cap{i}] "))
     run(cmds, P["logs"], "capture")
+    (P["state"] / "capture_info.json").write_text(json.dumps(
+        {"n_images": a.n_images, "site": a.site, "tokens_per_pass": a.tokens_per_pass,
+         "corpus": a.corpus, "capture_batch": a.capture_batch}, indent=2))
 
 
 def st_merge(a, P):
@@ -156,8 +163,9 @@ def st_merge(a, P):
 
 
 def st_pool(a, P):
-    run([([PY, "scripts/pool_shards.py", "--acts", str(P["merged"]),
-           "--site", MAIN_SITE], {}, "")], P["logs"], "pool")
+    for extra in ([], ["--matched"]):
+        run([([PY, "scripts/pool_shards.py", "--acts", str(P["merged"]),
+               "--site", a.site, *extra], {}, "")], P["logs"], "pool")
 
 
 def st_train(a, P):
@@ -169,12 +177,12 @@ def st_train(a, P):
         common.append("--no-amp")
     # Main-site SAEs first: these are the ones every later stage depends on.
     if a.gpus >= 2:
-        split = [["0", "1"], ["2", "pooled"]]
-        run([([PY, "scripts/02_train.py", *common, "--site", MAIN_SITE,
+        split = [["0", "1", "pooled_matched"], ["2", "pooled"]]
+        run([([PY, "scripts/02_train.py", *common, "--site", a.site,
                "--buckets", *b], gpu_env(i, a.gpus), f"[train{i}] ")
              for i, b in enumerate(split)], P["logs"], "train")
     else:
-        run([([PY, "scripts/02_train.py", *common, "--site", MAIN_SITE], {}, "")],
+        run([([PY, "scripts/02_train.py", *common, "--site", a.site], {}, "")],
             P["logs"], "train")
     if a.all_sites:   # secondary sites for the cross-site comparison, if captured
         others = [[PY, "scripts/02_train.py", *common, "--buckets", "0", "1", "2"]]
@@ -184,7 +192,8 @@ def st_train(a, P):
     for s in sorted(P["runs"].glob("*/summary.json")):
         d = read_json(s)
         rows.append({"shard": s.parent.name, "site": d["site"],
-                     "bucket": "pooled" if int(d["bucket"]) < 0 else str(d["bucket"]),
+                     "bucket": {-1: "pooled", -2: "pooled_matched"}.get(int(d["bucket"]),
+                                                                       str(d["bucket"])),
                      "n_tokens": d["n_tokens"], "EV": d["final"]["explained_variance"],
                      "L0": d["final"]["l0"], "dead": d["final"]["dead_frac"],
                      "never_fired": d["n_never_fired"], "act_scale": d["act_scale"],
@@ -192,25 +201,25 @@ def st_train(a, P):
     (P["runs"] / "index.json").write_text(json.dumps(rows, indent=2))
 
 
-def _main_sae(P, bucket):
-    from_slug = MAIN_SITE.replace(".", "_") + f"__b{bucket}"
+def _main_sae(a, P, bucket):
+    from_slug = a.site.replace(".", "_") + f"__b{bucket}"
     run_dir = P["runs"] / from_slug
     return run_dir / "sae.pt", read_json(run_dir / "summary.json")["act_scale"]
 
 
 def st_locate(a, P):
-    sae, scale = _main_sae(P, a.analysis_bucket)
+    sae, scale = _main_sae(a, P, a.analysis_bucket)
     run([([PY, "scripts/03_locate.py", "--model", a.model, "--sae", str(sae),
-           "--site", MAIN_SITE, "--bucket", str(a.analysis_bucket),
+           "--site", a.site, "--bucket", str(a.analysis_bucket),
            "--act-scale", str(scale), "--repeats", str(a.locate_repeats),
            "--out", str(P["out"] / "locate.json")], gpu_env(0, a.gpus), "")],
         P["logs"], "locate")
 
 
 def st_atlas(a, P):
-    sae, scale = _main_sae(P, a.analysis_bucket)
+    sae, scale = _main_sae(a, P, a.analysis_bucket)
     run([([PY, "scripts/05_atlas.py", "--model", a.model, "--sae", str(sae),
-           "--site", MAIN_SITE, "--bucket", str(a.analysis_bucket),
+           "--site", a.site, "--bucket", str(a.analysis_bucket),
            "--act-scale", str(scale), "--locate", str(P["out"] / "locate.json"),
            "--features", "12", "--top-prompts", "4",
            "--out", str(P["out"] / "atlas")], gpu_env(0, a.gpus), "")],
@@ -221,12 +230,13 @@ def st_substitute(a, P):
     table = {}
     cache = P["out"] / "substitution_latents.pt"
     for b in (0, 1, 2):
-        for kind, slug_bucket in (("bucketed", b), ("pooled", "pooled")):
-            sae, scale = _main_sae(P, slug_bucket)
+        for kind, slug_bucket in (("bucketed", b), ("pooled", "pooled"),
+                                  ("pooled_matched", "pooled_matched")):
+            sae, scale = _main_sae(a, P, slug_bucket)
             out = P["out"] / f"substitution_{kind}_b{b}.json"
             if not out.exists():
                 run([([PY, "scripts/06_substitution.py", "--model", a.model,
-                       "--sae", str(sae), "--site", MAIN_SITE, "--bucket", str(b),
+                       "--sae", str(sae), "--site", a.site, "--bucket", str(b),
                        "--act-scale", str(scale), "--out", str(out),
                        "--latent-cache", str(cache)], gpu_env(0, a.gpus), "")],
                     P["logs"], "substitute")
@@ -235,22 +245,22 @@ def st_substitute(a, P):
 
 
 def st_amplify(a, P):
-    sae, scale = _main_sae(P, a.analysis_bucket)
+    sae, scale = _main_sae(a, P, a.analysis_bucket)
     run([([PY, "scripts/04_steer.py", "--model", a.model, "--clip", a.clip,
-           "--sae", str(sae), "--site", MAIN_SITE, "--act-scale", str(scale),
+           "--sae", str(sae), "--site", a.site, "--act-scale", str(scale),
            "--locate", str(P["out"] / "locate.json"), "--mode", "amplify",
-           "--strengths", "0", "2", "4", "8", "--n-prompts", "8",
+           "--n-prompts", str(a.steer_prompts), "--seeds", str(a.steer_seeds),
            "--out", str(P["out"] / "steer_amplify.json"),
            "--save-grids", str(P["out"] / "grids")], gpu_env(0, a.gpus), "")],
         P["logs"], "amplify")
 
 
 def st_erase(a, P):
-    sae, scale = _main_sae(P, a.analysis_bucket)
+    sae, scale = _main_sae(a, P, a.analysis_bucket)
     run([([PY, "scripts/04_steer.py", "--model", a.model, "--clip", a.clip,
-           "--sae", str(sae), "--site", MAIN_SITE, "--act-scale", str(scale),
+           "--sae", str(sae), "--site", a.site, "--act-scale", str(scale),
            "--locate", str(P["out"] / "locate.json"), "--mode", "erase",
-           "--strengths", "0", "0.5", "1.0", "--n-prompts", "8",
+           "--n-prompts", str(a.steer_prompts), "--seeds", str(a.steer_seeds),
            "--out", str(P["out"] / "steer_erase.json"),
            "--save-grids", str(P["out"] / "grids")], gpu_env(0, a.gpus), "")],
         P["logs"], "erase")
@@ -260,9 +270,11 @@ def st_report(a, P):
     # Describe what was actually run (from the artifacts), not this invocation's flags.
     idx = read_json(P["runs"] / "index.json")
     cfg0 = read_json(P["runs"] / idx[0]["shard"] / "summary.json")["sae_cfg"] if idx else {}
-    n_img = sum(read_json(p)["images_done"] for p in P["acts"].glob("gpu*/progress.json"))
+    info = P["state"] / "capture_info.json"
+    n_img = (read_json(info)["n_images"] if info.exists() else
+             sum(read_json(p)["images_done"] for p in P["acts"].glob("gpu*/progress.json")))
     lines = ["# Project B — results", "",
-             f"Model `{a.model}` · site `{MAIN_SITE}` · expansion {cfg0.get('expansion', '?')}"
+             f"Model `{a.model}` · site `{a.site}` · expansion {cfg0.get('expansion', '?')}"
              f" · k {cfg0.get('k', '?')} · {n_img or 'n/a'} capture images"
              f" · analysis bucket {a.analysis_bucket}", ""]
     lines += ["## SAE training", "",
@@ -277,18 +289,33 @@ def st_report(a, P):
     t = P["out"] / "substitution_table.json"
     if t.exists():
         tab = read_json(t)
-        lines += ["", "## Faithfulness: loss recovered (pooled vs per-bucket SAEs)", "",
+        lines += ["", "## Faithfulness: loss recovered", "",
                   "Each cell substitutes the SAE reconstruction into the UNet at that "
                   "bucket's timesteps only. 1.0 = no loss; 0 = no better than ablating "
-                  "the layer.", "",
+                  "the layer. Mean ± std over noise draws. `pooled` saw 3x the data of a "
+                  "bucketed SAE; `pooled_matched` saw the same amount -- compare bucketed "
+                  "with pooled_matched for the fair test.", "",
                   "| | bucket 0 (texture) | bucket 1 (structure) | bucket 2 (composition) |",
                   "|---|---|---|---|"]
-        for kind in ("bucketed", "pooled"):
+        for kind in ("bucketed", "pooled", "pooled_matched"):
             cells = []
             for b in (0, 1, 2):
-                v = tab.get(f"{kind}_b{b}", {}).get("loss_recovered")
-                cells.append("n/a" if v is None else f"{v:.3f}")
+                c = tab.get(f"{kind}_b{b}", {})
+                v = c.get("loss_recovered")
+                cells.append("n/a" if v is None else
+                             f"{v:.3f} ± {c.get('loss_recovered_std', 0):.3f}")
             lines.append(f"| {kind} SAE | " + " | ".join(cells) + " |")
+        lines += ["", "Raw denoising losses (clean / substituted / ablated) and how much "
+                      "ablating the layer costs. A small ablation cost makes the ratio noisy.",
+                  "", "| cell | clean | substituted | ablated | ablation cost |",
+                  "|---|---|---|---|---|"]
+        for k in sorted(tab):
+            c = tab[k]
+            if "clean" not in c:
+                continue
+            lines.append(f"| {k} | {c['clean']:.5f} | {c['substituted']:.5f} | "
+                         f"{c['ablated']:.5f} | "
+                         f"{100 * c.get('ablation_cost_rel', float('nan')):.1f}% |")
         degenerate = [k for k, v in tab.items()
                       if v.get("ablated", 1) - v.get("clean", 0) <= 0]
         if degenerate:
@@ -305,19 +332,29 @@ def st_report(a, P):
             lines.append(f"| {c} | {f['feature']} | {f['auc']:.3f} | "
                          f"{f['fire_rate_concept']:.3f} | {f['fire_rate_neutral']:.3f} |")
 
+    def pm(r, k):
+        v = r.get(k)
+        return "—" if v is None else f"{v:+.4f} ± {r.get(k + '_std', 0):.4f}"
+
     for mode in ("amplify", "erase"):
         p = P["out"] / f"steer_{mode}.json"
         if not p.exists():
             continue
-        rep = read_json(p)["report"]
+        blob = read_json(p)
+        rep = blob["report"]
+        what = ("ADD the feature direction on neutral prompts; strength = multiple of the "
+                "feature's typical active code" if mode == "amplify" else
+                "scale the feature's code by gamma on held-out concept prompts (EVAL); "
+                "holdout = near-neighbour prompts, each against its own unedited baseline")
         lines += ["", f"## Causal test: {mode}", "",
+                  f"{what}. Paired CLIP deltas (edited − unedited, same seed), mean ± std "
+                  f"over {len(blob.get('seeds', []))} seeds.", "",
                   "| concept | feature | best strength | concept CLIP Δ | prompt CLIP Δ | "
                   "holdout prompt Δ |", "|---|---|---|---|---|---|"]
         for c, r in rep.items():
-            h = r.get("holdout_prompt_delta")
-            lines.append(f"| {c} | {r['feature']} | {r['best_strength']} | "
-                         f"{r['concept_delta']:+.4f} | {r['prompt_retention_delta']:+.4f} | "
-                         f"{'—' if h is None else f'{h:+.4f}'} |")
+            lines.append(f"| {c} | {r['feature']} | {r['best_strength']:g} | "
+                         f"{pm(r, 'concept_delta')} | {pm(r, 'prompt_delta')} | "
+                         f"{pm(r, 'holdout_prompt_delta')} |")
 
     lines += ["", "## Where things are", "",
               f"- SAEs: `{P['runs']}`", f"- atlas sheets: `{P['out'] / 'atlas'}`",
@@ -329,7 +366,7 @@ def st_report(a, P):
 FUNCS = {name: globals()[f"st_{name}"] for name in STAGES}
 
 
-def resume_from(src: Path, P) -> None:
+def resume_from(src: Path, P, site: str | None = None) -> None:
     """Copy a previous run's progress into this (empty) root.
 
     SAEs, outputs, logs and stage markers are always copied. The ~8 GB of
@@ -339,6 +376,16 @@ def resume_from(src: Path, P) -> None:
     import shutil
     if not (src / "state").is_dir():
         log(f"resume-from: {src} has no state/ -- starting fresh")
+        return
+    # A previous run at a DIFFERENT site is not progress for this one: its
+    # markers would skip capture and every later stage. Run 1 predates
+    # capture_info.json and used the attn2 site, so a missing file counts as a
+    # mismatch unless that is the site requested.
+    info = src / "state" / "capture_info.json"
+    prev_site = read_json(info)["site"] if info.exists() else ATTN2_SITE
+    if site is not None and prev_site != site:
+        log(f"resume-from: {src} captured {prev_site}, this run captures {site} "
+            "-- ignoring it and starting fresh")
         return
     done = sorted(p.stem for p in (src / "state").glob("*.done"))
     log(f"resuming from {src}: finished stages {done}")
@@ -360,11 +407,14 @@ def main():
     ap.add_argument("--acts-dir", default=None, help="activations (default: <root>/data)")
     ap.add_argument("--model", default="stable-diffusion-v1-5/stable-diffusion-v1-5")
     ap.add_argument("--clip", default="openai/clip-vit-base-patch32")
-    ap.add_argument("--n-images", type=int, default=500)
+    ap.add_argument("--site", default=RESIDUAL_SITE,
+                    help="layer to capture; run 1 used the attn2 sub-layer "
+                         f"({ATTN2_SITE})")
+    ap.add_argument("--n-images", type=int, default=1000)
     ap.add_argument("--diffusion-steps", type=int, default=25)
     ap.add_argument("--capture-batch", type=int, default=8)
     ap.add_argument("--tokens-per-pass", type=int, default=1024)
-    ap.add_argument("--corpus", type=int, default=256)
+    ap.add_argument("--corpus", type=int, default=512)
     ap.add_argument("--all-sites", action="store_true",
                     help="also capture/train the other three sites (adds ~3x storage)")
     ap.add_argument("--expansion", type=int, default=8)
@@ -373,6 +423,8 @@ def main():
     ap.add_argument("--train-batch", type=int, default=4096)
     ap.add_argument("--analysis-bucket", type=int, default=1)
     ap.add_argument("--locate-repeats", type=int, default=4)
+    ap.add_argument("--steer-prompts", type=int, default=6)
+    ap.add_argument("--steer-seeds", type=int, default=3)
     ap.add_argument("--only", nargs="*", default=None, help="run just these stages")
     ap.add_argument("--redo", nargs="*", default=[], help="force these stages to rerun")
     ap.add_argument("--gpus", type=int, default=None, help="override detected GPU count")
@@ -393,7 +445,7 @@ def main():
     log(f"root {root} | acts {acts} | GPUs {a.gpus}")
 
     if a.resume_from and not any(P["state"].glob("*.done")):
-        resume_from(Path(a.resume_from), P)
+        resume_from(Path(a.resume_from), P, a.site)
 
     # If training hasn't finished but the activations have vanished (e.g. a Colab
     # VM was recycled while results live on Drive), the capture/merge/pool

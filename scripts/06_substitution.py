@@ -94,6 +94,9 @@ def main():
     ap.add_argument("--act-scale", type=float, required=True)
     ap.add_argument("--n-prompts", type=int, default=12)
     ap.add_argument("--n-timesteps", type=int, default=12)
+    ap.add_argument("--n-draws", type=int, default=4,
+                    help="independent noise draws; loss_recovered is reported as "
+                         "mean and std over draws so differences can be judged")
     ap.add_argument("--all-buckets", action="store_true",
                     help="also substitute outside the SAE's own timestep bucket")
     ap.add_argument("--size", type=int, default=512)
@@ -169,46 +172,67 @@ def main():
     # the two paths could disagree -- which crashed the second substitution run.
     unet_dev = next(pipe.unet.parameters()).device
     latents, embeds = latents.to(unet_dev), embeds.to(unet_dev)
-    noises = [torch.randn_like(latents) for _ in range(args.n_timesteps)]
     if args.all_buckets:
         ts = [int(T * (i + 0.5) / args.n_timesteps) for i in range(args.n_timesteps)]
     else:
         ts = [int(lo + (hi - lo) * (i + 0.5) / args.n_timesteps)
               for i in range(args.n_timesteps)]
 
-    results = {}
+    # Several independent noise draws. Within a draw, the three conditions share
+    # exactly the same noise and timesteps (a paired comparison); across draws
+    # the noise changes, which gives a spread for loss_recovered. Run 1 used a
+    # single draw, so a 0.05 difference between two SAEs could not be judged.
+    per_draw = []
     with torch.no_grad():
-        for mode in ("clean", "substituted", "ablated"):
-            state["mode"] = mode
-            state["n_hit"] = state["n_skip"] = 0
-            total = 0.0
-            for noise, t in zip(noises, ts):
-                state["t"] = float(t)
-                tt = torch.full((latents.shape[0],), t, device=unet_dev, dtype=torch.long)
-                noisy = sched.add_noise(latents, noise, tt)
-                pred = pipe.unet(noisy, tt, encoder_hidden_states=embeds).sample
-                total += float(F.mse_loss(pred.float(), noise.float().to(pred.device)))
-            results[mode] = total / len(ts)
-            print(f"{mode:<13} loss {results[mode]:.6f}   "
-                  f"(hooked {state['n_hit']}, skipped {state['n_skip']})", flush=True)
+        for d in range(args.n_draws):
+            noises = [torch.randn_like(latents) for _ in range(args.n_timesteps)]
+            draw = {}
+            for mode in ("clean", "substituted", "ablated"):
+                state["mode"] = mode
+                state["n_hit"] = state["n_skip"] = 0
+                total = 0.0
+                for noise, t in zip(noises, ts):
+                    state["t"] = float(t)
+                    tt = torch.full((latents.shape[0],), t, device=unet_dev, dtype=torch.long)
+                    noisy = sched.add_noise(latents, noise, tt)
+                    pred = pipe.unet(noisy, tt, encoder_hidden_states=embeds).sample
+                    total += float(F.mse_loss(pred.float(), noise.float().to(pred.device)))
+                draw[mode] = total / len(ts)
+            den = draw["ablated"] - draw["clean"]
+            draw["loss_recovered"] = ((draw["ablated"] - draw["substituted"]) / den
+                                      if abs(den) > 1e-9 else float("nan"))
+            per_draw.append(draw)
+            print(f"draw {d}: clean {draw['clean']:.6f}  substituted {draw['substituted']:.6f}"
+                  f"  ablated {draw['ablated']:.6f}  -> recovered {draw['loss_recovered']:.3f}"
+                  f"   (hooked {state['n_hit']}, skipped {state['n_skip']})", flush=True)
 
     handle.remove()
 
+    import statistics
+    results = {m: statistics.fmean(dr[m] for dr in per_draw)
+               for m in ("clean", "substituted", "ablated")}
     denom = results["ablated"] - results["clean"]
-    results["loss_recovered"] = (results["ablated"] - results["substituted"]) / denom \
-        if abs(denom) > 1e-9 else float("nan")
+    lrs = [dr["loss_recovered"] for dr in per_draw]
+    results["loss_recovered"] = ((results["ablated"] - results["substituted"]) / denom
+                                 if abs(denom) > 1e-9 else float("nan"))
+    results["loss_recovered_std"] = statistics.pstdev(lrs) if len(lrs) > 1 else 0.0
+    # How much ablating the layer costs, relative to the clean loss. If this is a
+    # few percent, loss_recovered divides by a small number and swings widely.
+    results["ablation_cost_rel"] = denom / results["clean"] if results["clean"] else float("nan")
     results.update({
         "site": args.site, "bucket": args.bucket,
         "timestep_range": [ts[0], ts[-1]],
         "all_buckets": args.all_buckets,
         "n_prompts": len(prompts), "n_timesteps": args.n_timesteps,
+        "n_draws": args.n_draws, "per_draw": per_draw,
     })
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(results, indent=2))
 
     lr = results["loss_recovered"]
-    print(f"\nloss recovered: {lr:.3f}")
+    print(f"\nloss recovered: {lr:.3f} ± {results['loss_recovered_std']:.3f}  "
+          f"(ablating the layer costs {100 * results['ablation_cost_rel']:.1f}% of clean loss)")
     if denom <= 0:
         print("  WARNING: ablating this site did not increase loss. The site "
               "barely matters here, so loss_recovered is meaningless -- pick a "

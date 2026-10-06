@@ -27,7 +27,7 @@ from sae.train import TrainConfig, train_sae
 
 
 def _bucket_label(b: int) -> str:
-    return "pooled" if int(b) < 0 else str(b)
+    return {-1: "pooled", -2: "pooled_matched"}.get(int(b), str(b))
 
 
 def main():
@@ -43,9 +43,11 @@ def main():
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--no-amp", action="store_true")
-    ap.add_argument("--site", default=None, help="substring filter on the site name")
+    ap.add_argument("--site", default=None,
+                    help="exact site name to train (the residual-stream site is a prefix "
+                         "of the attn2 site, so a substring match would catch both)")
     ap.add_argument("--buckets", nargs="*", default=None,
-                    help="e.g. 0 1 2 pooled (default: all)")
+                    help="e.g. 0 1 2 pooled pooled_matched (default: all)")
     ap.add_argument("--only-bucket", type=int, default=None, help="(legacy) single bucket")
     ap.add_argument("--buffer-tokens", type=int, default=1 << 19)
     ap.add_argument("--force", action="store_true")
@@ -63,7 +65,7 @@ def main():
     for meta_path in shards:
         meta = json.loads(meta_path.read_text())
         label = _bucket_label(meta["bucket"])
-        if args.site and args.site not in meta["site"]:
+        if args.site and args.site != meta["site"]:
             continue
         if wanted is not None and label not in wanted:
             continue

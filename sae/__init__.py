@@ -11,6 +11,7 @@ from .hooks import (
     SteerSpec,
     SD15_SITES,
     DEFAULT_SITE,
+    RESIDUAL_SITE,
     bucket_of,
     get_module,
 )
@@ -20,6 +21,6 @@ __all__ = [
     "ActivationStore", "ShardMeta", "ShardWriter",
     "TrainConfig", "train_sae", "feature_density",
     "ActivationCapture", "CaptureConfig", "SteeringHook", "SteerSpec",
-    "SD15_SITES", "DEFAULT_SITE", "bucket_of", "get_module",
+    "SD15_SITES", "DEFAULT_SITE", "RESIDUAL_SITE", "bucket_of", "get_module",
     "load_pipeline", "inspect_checkpoint", "find_snapshot",
 ]

@@ -60,6 +60,10 @@ import torch.nn as nn
 
 SD15_SITES = {
     # name                                            width
+    # Residual stream of the up-block's transformer (attn1 + attn2 + FF, with
+    # skips). Image-dependent, and the closest hook point to SAeUron's
+    # block-level feature maps. Recommended after run 1 -- see RESIDUAL_SITE.
+    "up_blocks.1.attentions.1.transformer_blocks.0": 1280,
     "mid_block.attentions.0.transformer_blocks.0.attn2": 1280,
     "up_blocks.1.attentions.1.transformer_blocks.0.attn2": 1280,
     "up_blocks.2.attentions.1.transformer_blocks.0.attn2": 640,
@@ -69,6 +73,13 @@ SD15_SITES = {
 # A good single-site default: deep enough to be semantic, shallow enough that
 # the features still localise spatially.
 DEFAULT_SITE = "up_blocks.1.attentions.1.transformer_blocks.0.attn2"
+
+# Run 1 finding: the attn2 sub-layer output is, per head, a convex combination
+# of the prompt's ~77 text-token value vectors. Across a corpus built from a few
+# dozen phrases that is a low-rank signal: an SAE explained 98.6% of its variance
+# with 82-92% of a 10,240-feature dictionary never firing. The residual stream
+# carries the image as well as the text, so it is the site for run 2.
+RESIDUAL_SITE = "up_blocks.1.attentions.1.transformer_blocks.0"
 
 
 def get_module(root: nn.Module, dotted: str) -> nn.Module:
@@ -228,8 +239,16 @@ class SteerSpec:
       ``scale``   -- multiply the feature's code by ``value`` (0.0 = ablate,
                      2.0 = amplify). Reversible, composable, and the natural
                      operation if you believe the code magnitude is meaningful.
-      ``clamp``   -- set the code to ``value`` wherever it is active. Useful for
-                     forcing a concept on regardless of the prompt.
+      ``clamp``   -- set the code to ``value`` wherever it is ALREADY active.
+                     It cannot introduce a concept: on a prompt where the feature
+                     is silent (most tokens of a neutral prompt) it does nothing.
+                     Run 1 used this for "amplify" and measured ~zero effect for
+                     exactly that reason.
+      ``add``     -- add ``value`` to the code at EVERY position, i.e. add
+                     ``value * W_dec[f]`` to the (normalised) activation. This is
+                     the operation that can put a concept into a neutral prompt;
+                     ``value`` is in the SAE's normalised units, so callers pass a
+                     multiple of the feature's typical active code.
       ``project`` -- remove the component of the *raw activation* along the
                      feature's decoder direction, scaled by ``value``. This does
                      not go through the SAE codes at all, so it still works where
@@ -263,11 +282,20 @@ class SteeringHook:
     """
 
     def __init__(self, sae, specs: Iterable[SteerSpec] = (),
-                 preserve_error: bool = True, cond_only: bool = True):
+                 preserve_error: bool = True, cond_only: bool = True,
+                 act_scale: float = 1.0):
+        """``act_scale`` is the factor the SAE's training data was multiplied by
+        (``summary.json -> act_scale``). The SAE only understands activations in
+        that normalised space: TopK picks features by comparing pre-activations
+        against biases learned at that scale. Run 1 accepted this value on the
+        command line and never applied it, so steering encoded raw activations
+        and every code edit was off-distribution. It is now applied on the way in
+        and undone on the way out."""
         self.sae = sae
         self.specs = list(specs)
         self.preserve_error = preserve_error
         self.cond_only = cond_only
+        self.act_scale = float(act_scale)
         self._handle = None
 
     def attach(self, unet: nn.Module, site: str) -> "SteeringHook":
@@ -283,7 +311,7 @@ class SteeringHook:
     def _edit(self, x: torch.Tensor) -> torch.Tensor:
         dev, dt = x.device, x.dtype
         sae = self.sae.to(dev)
-        xf = x.float()
+        xf = x.float() * self.act_scale            # into the SAE's normalised space
 
         projections = [s for s in self.specs if s.mode == "project"]
         code_edits = [s for s in self.specs if s.mode != "project"]
@@ -297,6 +325,8 @@ class SteeringHook:
             for s in code_edits:
                 if s.mode == "scale":
                     codes[..., s.feature] = codes[..., s.feature] * s.value
+                elif s.mode == "add":
+                    codes[..., s.feature] = codes[..., s.feature] + s.value
                 elif s.mode == "clamp":
                     active = codes[..., s.feature] > 0
                     codes[..., s.feature] = torch.where(
@@ -315,7 +345,7 @@ class SteeringHook:
             d = torch.nn.functional.normalize(sae.W_dec[s.feature], dim=0)
             out = out - s.value * (out @ d).unsqueeze(-1) * d
 
-        return out.to(dt)
+        return (out / self.act_scale).to(dt)   # back to the model's own scale
 
     def _hook(self, module, args, output):
         is_tuple = isinstance(output, (tuple, list))

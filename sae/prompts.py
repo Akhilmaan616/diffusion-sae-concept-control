@@ -118,3 +118,42 @@ HOLDOUT = {
 
 def all_training_prompts(repeat: int = 1) -> list[str]:
     return DISCOVERY * repeat
+
+
+# Concept prompts used ONLY to evaluate erasure -- never to locate features.
+# Run 1 evaluated on PROBE, the same prompts the feature was selected on, which
+# biases the result toward the feature looking effective.
+EVAL = {
+    "van_gogh": [
+        "a cafe terrace at night in the style of Van Gogh",
+        "a portrait of a farmer painted like Van Gogh",
+        "cypress trees under a swirling sky, Van Gogh style",
+        "a bedroom interior in Van Gogh's style",
+        "irises in a garden, a Van Gogh painting",
+        "a harbour with boats in the style of Van Gogh",
+    ],
+    "dog": [
+        "a dog lying by a fireplace",
+        "a dalmatian on a beach",
+        "a dog catching a frisbee",
+        "a sleepy beagle on a couch",
+        "a dog in a snowy park",
+        "a terrier looking out of a car window",
+    ],
+    "fire": [
+        "a bonfire on a beach at night",
+        "flames rising from a fireplace",
+        "a torch burning in a dark cave",
+        "a wildfire seen from a distance",
+        "a matchstick bursting into flame",
+        "fire in a metal barrel in an alley",
+    ],
+    "watercolour": [
+        "a watercolour of a mountain lake",
+        "a watercolour painting of a cat",
+        "a watercolour of a city skyline at dusk",
+        "a watercolour still life of pears",
+        "a watercolour of a sailboat",
+        "a watercolour of autumn trees",
+    ],
+}

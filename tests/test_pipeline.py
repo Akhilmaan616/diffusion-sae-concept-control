@@ -118,6 +118,8 @@ def test_merge_and_pool_are_virtual_and_correct():
         _run(["scripts/merge_shards.py", "--inputs", str(acts / "gpu0"), str(acts / "gpu1"),
               "--out", str(acts / "merged")])
         _run(["scripts/pool_shards.py", "--acts", str(acts / "merged"), "--site", SITE])
+        _run(["scripts/pool_shards.py", "--acts", str(acts / "merged"), "--site", SITE,
+              "--matched"])
 
         merged = acts / "merged"
         assert not list(merged.glob("*.bin")), "merge copied data"
@@ -135,6 +137,9 @@ def test_merge_and_pool_are_virtual_and_correct():
                   for b in (0, 1, 2))
         assert pooled.n_tokens == 3 * per
         assert pooled.batch(64).shape == (64, 64)
+        # The data-matched control: same total tokens as ONE bucket, a third from each.
+        matched = ActivationStore(merged / f"{SLUG}__bpooled_matched.json", buffer_tokens=256)
+        assert matched.n_tokens == 3 * (per // 3), (matched.n_tokens, per)
 
         # Reading through the manifest must return the same rows as the file.
         st = ActivationStore(merged / f"{SLUG}__b0.json", buffer_tokens=256, normalize=False)
@@ -144,7 +149,7 @@ def test_merge_and_pool_are_virtual_and_correct():
         assert np.allclose(got, np.asarray(direct[:5], dtype=np.float32))
 
         kinds = sorted(p.stem.split("__")[-1] for p in find_shards(merged))
-        assert kinds == ["b0", "b1", "b2", "bpooled"], kinds
+        assert kinds == ["b0", "b1", "b2", "bpooled", "bpooled_matched"], kinds
         print(f"  merged 2 GPUs + pooled 3 buckets with {size:,} bytes of manifests; "
               f"pooled = 3 x {per} tokens")
 
@@ -153,7 +158,7 @@ def test_orchestrator_end_to_end_and_resume():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td) / "proj"
         args = ["scripts/run_pipeline.py", "--root", str(root), "--model", "__fake__",
-                "--gpus", "0", "--n-images", "16", "--capture-batch", "4",
+                "--site", SITE, "--gpus", "0", "--n-images", "16", "--capture-batch", "4",
                 "--corpus", "32", "--expansion", "2", "--k", "4",
                 "--train-steps", "60", "--train-batch", "256",
                 "--only", "prefetch", "capture", "merge", "pool", "train"]
@@ -162,7 +167,7 @@ def test_orchestrator_end_to_end_and_resume():
             assert (root / "state" / f"{s}.done").exists(), s
         idx = json.loads((root / "runs" / "index.json").read_text())
         buckets = sorted(row["bucket"] for row in idx)
-        assert buckets == ["0", "1", "2", "pooled"], buckets
+        assert buckets == ["0", "1", "2", "pooled", "pooled_matched"], buckets
         for row in idx:
             assert (Path(row["run_dir"]) / "sae.pt").exists()
 
@@ -174,8 +179,8 @@ def test_orchestrator_end_to_end_and_resume():
         # every SAE it already has.
         (root / "state" / "train.done").unlink()
         r3 = _run(args)
-        assert r3.stdout.count("already trained") == 4, r3.stdout[-800:]
-        print(f"  5 stages ran; rerun skipped all 5; re-entering train skipped 4 trained SAEs "
+        assert r3.stdout.count("already trained") == 5, r3.stdout[-800:]
+        print(f"  5 stages ran; rerun skipped all 5; re-entering train skipped 5 trained SAEs "
               f"({', '.join(buckets)})")
 
 
@@ -187,7 +192,7 @@ def test_lost_activations_trigger_recapture():
     with tempfile.TemporaryDirectory() as td:
         root, acts = Path(td) / "proj", Path(td) / "local_acts"
         args = ["scripts/run_pipeline.py", "--root", str(root), "--acts-dir", str(acts),
-                "--model", "__fake__", "--gpus", "0", "--n-images", "8",
+                "--model", "__fake__", "--site", SITE, "--gpus", "0", "--n-images", "8",
                 "--capture-batch", "4", "--corpus", "16",
                 "--only", "prefetch", "capture", "merge", "pool"]
         _run(args)
@@ -221,17 +226,30 @@ def test_all_eleven_stages_end_to_end():
         assert atlas["features"] and all((out / "atlas" / f["image"]).exists()
                                          for f in atlas["features"])
         table = json.loads((out / "substitution_table.json").read_text())
-        assert sorted(table) == sorted(f"{k}_b{b}" for k in ("bucketed", "pooled")
+        assert sorted(table) == sorted(f"{k}_b{b}" for k in ("bucketed", "pooled",
+                                                              "pooled_matched")
                                        for b in (0, 1, 2))
+        for cell in table.values():
+            assert {"clean", "substituted", "ablated", "loss_recovered_std",
+                    "per_draw"} <= set(cell), sorted(cell)
+        idx = json.loads((root / "runs" / "index.json").read_text())
+        assert {r["site"] for r in idx} == {"up_blocks.1.attentions.1.transformer_blocks.0"}
         for mode in ("amplify", "erase"):
-            rep = json.loads((out / f"steer_{mode}.json").read_text())["report"]
+            blob = json.loads((out / f"steer_{mode}.json").read_text())
+            rep = blob["report"]
             assert rep, f"empty {mode} report"
+            assert len(blob["seeds"]) == 3
+            for r in rep.values():
+                assert "concept_delta_std" in r and r["n_seeds"] == 3
+                if mode == "erase":
+                    assert "holdout_prompt_delta" in r
         report = (out / "REPORT.md").read_text()
         for section in ("## SAE training", "## Faithfulness", "## Candidate concept",
                         "## Causal test: amplify", "## Causal test: erase"):
             assert section in report, section
-        print(f"  all 11 stages completed; atlas {len(atlas['features'])} sheets, "
-              f"6-cell substitution table, both steering reports, REPORT.md complete")
+        assert "pooled_matched SAE" in report and "± " in report
+        print(f"  all 11 stages completed (residual-stream site); atlas {len(atlas['features'])} sheets, "
+              f"9-cell substitution table, both steering reports, REPORT.md complete")
 
 
 def test_resume_from_previous_output_restarts_at_failed_stage():
@@ -241,7 +259,7 @@ def test_resume_from_previous_output_restarts_at_failed_stage():
     import shutil
     with tempfile.TemporaryDirectory() as td:
         old, new = Path(td) / "old", Path(td) / "new"
-        common = ["--model", "__fake__", "--clip", "__fake__", "--gpus", "0",
+        common = ["--model", "__fake__", "--clip", "__fake__", "--gpus", "0", "--site", SITE,
                   "--n-images", "16", "--capture-batch", "4", "--corpus", "32",
                   "--expansion", "2", "--k", "4", "--train-steps", "60",
                   "--train-batch", "256", "--locate-repeats", "1"]
@@ -256,8 +274,16 @@ def test_resume_from_previous_output_restarts_at_failed_stage():
         assert not (new / "data").exists(), "activations were copied needlessly"
         for s in ("atlas", "substitute", "amplify", "erase", "report"):
             assert (new / "state" / f"{s}.done").exists(), s
+        # A run-1 output (different site) must NOT be treated as progress.
+        other = Path(td) / "other"
+        r = _run(["scripts/run_pipeline.py", "--root", str(other), "--resume-from", str(old),
+                  *[c for c in common if c not in ("--site", SITE)],
+                  "--only", "prefetch"])
+        assert "ignoring it and starting fresh" in r.stdout, r.stdout[-600:]
+        assert not (other / "state" / "locate.done").exists()
         print("  seeded from a run that stopped after locate: skipped 5 stages, "
-              "copied no activations, finished atlas..report")
+              "copied no activations, finished atlas..report; a different-site "
+              "source is ignored")
 
 
 if __name__ == "__main__":
