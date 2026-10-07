@@ -112,7 +112,7 @@ def main():
         fires = (pos > 0).float().mean(dim=0)
         scores = torch.where(fires > 0.02, scores, torch.zeros_like(scores))
 
-        vals, idx = torch.topk(scores, args.top)
+        vals, idx = torch.topk(scores, min(args.top, scores.numel()))
         results[concept] = [
             {"feature": int(i), "auc": float(v),
              "fire_rate_concept": float(fires[i]),

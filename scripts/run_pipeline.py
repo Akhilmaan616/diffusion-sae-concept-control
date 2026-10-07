@@ -48,7 +48,7 @@ PY = sys.executable
 ATTN2_SITE = "up_blocks.1.attentions.1.transformer_blocks.0.attn2"   # run 1
 RESIDUAL_SITE = "up_blocks.1.attentions.1.transformer_blocks.0"       # run 2 default
 STAGES = ["prefetch", "capture", "merge", "pool", "train", "locate", "atlas",
-          "substitute", "amplify", "erase", "report"]
+          "substitute", "amplify", "erase", "erase_multi", "report"]
 
 
 # --------------------------------------------------------------------- utils
@@ -266,6 +266,32 @@ def st_erase(a, P):
         P["logs"], "erase")
 
 
+def st_erase_multi(a, P):
+    """Dose-response erasure (top 5/10/20 features + a random-20 control), for
+    two SAEs: the bucket-1 SAE used everywhere else, and the pooled SAE, which
+    is in-distribution at every timestep the edit touches. With two GPUs the
+    arms run side by side. Each arm locates its own top-200 features first."""
+    arms = [("bucketed_b1", a.analysis_bucket), ("pooled", "pooled")]
+    cmds = []
+    for i, (arm, bucket) in enumerate(arms):
+        sae, scale = _main_sae(a, P, bucket)
+        argv = [PY, "scripts/07_erase_multi.py", "--model", a.model, "--clip", a.clip,
+                "--sae", str(sae), "--arm", arm, "--site", a.site,
+                "--bucket", str(a.analysis_bucket), "--act-scale", str(scale),
+                "--locate", str(P["out"] / f"locate_top200_{arm}.json"),
+                "--locate-repeats", str(a.locate_repeats),
+                "--n-prompts", str(a.steer_prompts), "--seeds", str(a.steer_seeds),
+                "--ns", *[str(n) for n in a.erase_ns],
+                "--out", str(P["out"] / f"erase_multi_{arm}.json"),
+                "--grids", str(P["out"] / "erase_multi" / arm)]
+        cmds.append((argv, gpu_env(i % max(1, min(a.gpus, 2)), a.gpus), f"[{arm}] "))
+    if a.gpus >= 2:
+        run(cmds, P["logs"], "erase_multi")
+    else:
+        for c in cmds:
+            run([c], P["logs"], "erase_multi")
+
+
 def st_report(a, P):
     # Describe what was actually run (from the artifacts), not this invocation's flags.
     idx = read_json(P["runs"] / "index.json")
@@ -356,6 +382,27 @@ def st_report(a, P):
                          f"{pm(r, 'concept_delta')} | {pm(r, 'prompt_delta')} | "
                          f"{pm(r, 'holdout_prompt_delta')} |")
 
+    em = [(arm, P["out"] / f"erase_multi_{arm}.json") for arm in ("bucketed_b1", "pooled")]
+    em = [(arm, read_json(p)) for arm, p in em if p.exists()]
+    if em:
+        lines += ["", "## Multi-feature erasure (dose-response)", "",
+                  "Scale the top-N concept features (by AUC) to gamma at every step, on "
+                  "EVAL prompts. `random20` = 20 features active on the concept prompts "
+                  "but not in its top 20 -- the control. `edit` = relative change to the "
+                  "activations. Paired CLIP deltas, mean ± std over seeds. Success = "
+                  "concept Δ clearly negative, below random20, with holdout Δ near zero."]
+        for arm, blob in em:
+            lines += ["", f"### SAE: {arm}", "",
+                      "| concept | setting | concept CLIP Δ | prompt CLIP Δ | "
+                      "holdout prompt Δ | edit |", "|---|---|---|---|---|---|"]
+            for c, r in blob["report"].items():
+                for lab, e in r["settings"].items():
+                    lines.append(f"| {c} | {lab} | {pm(e, 'concept_delta')} | "
+                                 f"{pm(e, 'prompt_delta')} | {pm(e, 'holdout_prompt_delta')} | "
+                                 f"{100 * e['edit_rel_norm']:.1f}% |")
+        lines += ["", f"Image grids: `{P['out'] / 'erase_multi'}` (rows: base, then each "
+                      "setting; columns: first 4 prompts)."]
+
     lines += ["", "## Where things are", "",
               f"- SAEs: `{P['runs']}`", f"- atlas sheets: `{P['out'] / 'atlas'}`",
               f"- steering images: `{P['out'] / 'grids'}`", f"- logs: `{P['logs']}`"]
@@ -425,6 +472,7 @@ def main():
     ap.add_argument("--locate-repeats", type=int, default=4)
     ap.add_argument("--steer-prompts", type=int, default=6)
     ap.add_argument("--steer-seeds", type=int, default=3)
+    ap.add_argument("--erase-ns", type=int, nargs="*", default=[5, 10, 20])
     ap.add_argument("--only", nargs="*", default=None, help="run just these stages")
     ap.add_argument("--redo", nargs="*", default=[], help="force these stages to rerun")
     ap.add_argument("--gpus", type=int, default=None, help="override detected GPU count")
@@ -461,7 +509,7 @@ def main():
         if a.only and name not in a.only:
             continue
         marker = P["state"] / f"{name}.done"
-        if marker.exists() and name not in a.redo:
+        if marker.exists() and name not in a.redo and name != "report":
             log(f"skip {name} (done)")
             continue
         log(f"=== {name} ===")

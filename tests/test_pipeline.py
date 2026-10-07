@@ -217,7 +217,7 @@ def test_all_eleven_stages_end_to_end():
                   "--k", "4", "--train-steps", "60", "--train-batch", "256",
                   "--locate-repeats", "1"])
         stages = ["prefetch", "capture", "merge", "pool", "train", "locate", "atlas",
-                  "substitute", "amplify", "erase", "report"]
+                  "substitute", "amplify", "erase", "erase_multi", "report"]
         missing = [s for s in stages if not (root / "state" / f"{s}.done").exists()]
         assert not missing, f"stages not completed: {missing}\n{r.stdout[-1500:]}"
 
@@ -248,7 +248,18 @@ def test_all_eleven_stages_end_to_end():
                         "## Causal test: amplify", "## Causal test: erase"):
             assert section in report, section
         assert "pooled_matched SAE" in report and "± " in report
-        print(f"  all 11 stages completed (residual-stream site); atlas {len(atlas['features'])} sheets, "
+        assert "## Multi-feature erasure" in report
+        for arm in ("bucketed_b1", "pooled"):
+            em = json.loads((out / f"erase_multi_{arm}.json").read_text())
+            for c, r in em["report"].items():
+                assert set(r["settings"]) == {"top5", "top10", "top20", "top20_neg",
+                                              "random20"}, (arm, c, sorted(r["settings"]))
+                assert not set(r["features_top"]) & set(r["features_random"])
+                # A bigger erasure must be a bigger edit; gamma -1 bigger still.
+                e = {k: v["edit_rel_norm"] for k, v in r["settings"].items()}
+                assert e["top5"] <= e["top10"] <= e["top20"] < e["top20_neg"], e
+            assert (out / "erase_multi" / arm / "dog_eval.png").exists()
+        print(f"  all 12 stages completed (residual-stream site); atlas {len(atlas['features'])} sheets, "
               f"9-cell substitution table, both steering reports, REPORT.md complete")
 
 
@@ -284,6 +295,31 @@ def test_resume_from_previous_output_restarts_at_failed_stage():
         print("  seeded from a run that stopped after locate: skipped 5 stages, "
               "copied no activations, finished atlas..report; a different-site "
               "source is ignored")
+
+
+def test_erase_multi_added_to_a_finished_run():
+    """The Kaggle situation for the erasure experiment: run 2 finished all of
+    its stages (no erase_multi then). Seeding a new session from that output
+    must skip every finished stage, run only erase_multi, and rebuild the
+    report so it includes the new section."""
+    with tempfile.TemporaryDirectory() as td:
+        old, new = Path(td) / "old", Path(td) / "new"
+        common = ["--model", "__fake__", "--clip", "__fake__", "--gpus", "0",
+                  "--n-images", "16", "--capture-batch", "4", "--corpus", "32",
+                  "--expansion", "2", "--k", "4", "--train-steps", "60",
+                  "--train-batch", "256", "--locate-repeats", "1"]
+        old_stages = ["prefetch", "capture", "merge", "pool", "train", "locate", "atlas",
+                      "substitute", "amplify", "erase", "report"]
+        _run(["scripts/run_pipeline.py", "--root", str(old), *common, "--only", *old_stages])
+        assert "Multi-feature" not in (old / "outputs" / "REPORT.md").read_text()
+
+        r = _run(["scripts/run_pipeline.py", "--root", str(new), "--resume-from", str(old),
+                  *common])
+        for s in old_stages[1:-1]:
+            assert f"skip {s} (done)" in r.stdout, s
+        assert "=== erase_multi ===" in r.stdout
+        assert "## Multi-feature erasure" in (new / "outputs" / "REPORT.md").read_text()
+        print("  finished run seeded: 9 stages skipped, erase_multi ran, report rebuilt")
 
 
 if __name__ == "__main__":
