@@ -319,7 +319,18 @@ def test_erase_multi_added_to_a_finished_run():
             assert f"skip {s} (done)" in r.stdout, s
         assert "=== erase_multi ===" in r.stdout
         assert "## Multi-feature erasure" in (new / "outputs" / "REPORT.md").read_text()
-        print("  finished run seeded: 9 stages skipped, erase_multi ran, report rebuilt")
+
+        # Same situation, but erase_multi crashes. The report must still be
+        # rebuilt and must say so -- not silently show the previous run's report.
+        bad = Path(td) / "bad"
+        r = _run(["scripts/run_pipeline.py", "--root", str(bad), "--resume-from", str(old),
+                  *common], env_extra={"SAE_FAKE_CRASH_AFTER": "0"}, check=False)
+        assert r.returncode != 0
+        rep = (bad / "outputs" / "REPORT.md").read_text()
+        assert "Stage `erase_multi` FAILED" in rep, rep[:600]
+        assert "stages run this session" in rep
+        print("  finished run seeded: 9 stages skipped, erase_multi ran, report rebuilt; "
+              "a crash in erase_multi is stated at the top of the rebuilt report")
 
 
 if __name__ == "__main__":

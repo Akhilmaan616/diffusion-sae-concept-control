@@ -87,7 +87,7 @@ def run(cmds: list[tuple[list[str], dict, str]], log_dir: Path, name: str) -> No
     for fh in files:
         fh.close()
     if any(codes):
-        raise SystemExit(f"stage '{name}' failed (exit codes {codes}); see {log_dir}")
+        raise RuntimeError(f"stage '{name}' failed (exit codes {codes}); see {log_dir}")
 
 
 def gpu_count() -> int:
@@ -294,12 +294,22 @@ def st_erase_multi(a, P):
 
 def st_report(a, P):
     # Describe what was actually run (from the artifacts), not this invocation's flags.
-    idx = read_json(P["runs"] / "index.json")
+    idx_p = P["runs"] / "index.json"
+    idx = read_json(idx_p) if idx_p.exists() else []
     cfg0 = read_json(P["runs"] / idx[0]["shard"] / "summary.json")["sae_cfg"] if idx else {}
     info = P["state"] / "capture_info.json"
     n_img = (read_json(info)["n_images"] if info.exists() else
              sum(read_json(p)["images_done"] for p in P["acts"].glob("gpu*/progress.json")))
+    st = P["state"] / "last_run.json"
+    run_info = read_json(st) if st.exists() else {}
     lines = ["# Project B — results", "",
+             f"Generated {time.strftime('%Y-%m-%d %H:%M:%S')} · stages run this session: "
+             f"{', '.join(run_info.get('ran') or []) or 'none (all were already done)'}", ""]
+    if run_info.get("failed"):
+        f = run_info["failed"]
+        lines += [f"> **Stage `{f['stage']}` FAILED in this run; later stages did not run.**",
+                  f"> `{f['error']}`", f"> Full log: `{f['log']}`", ""]
+    lines += [
              f"Model `{a.model}` · site `{a.site}` · expansion {cfg0.get('expansion', '?')}"
              f" · k {cfg0.get('k', '?')} · {n_img or 'n/a'} capture images"
              f" · analysis bucket {a.analysis_bucket}", ""]
@@ -505,19 +515,44 @@ def main():
                 log(f"activations missing -- re-running {s}")
                 m.unlink()
 
+    # A failed stage stops the stages after it, but the report is still rebuilt
+    # so REPORT.md always says what happened in THIS run. Before this, a failure
+    # left the previous run's REPORT.md in place, indistinguishable from a fresh one.
+    status = P["state"] / "last_run.json"
+    ran, skipped, failed = [], [], None
     for name in STAGES:
         if a.only and name not in a.only:
+            continue
+        if failed and name != "report":
             continue
         marker = P["state"] / f"{name}.done"
         if marker.exists() and name not in a.redo and name != "report":
             log(f"skip {name} (done)")
+            skipped.append(name)
             continue
+        if name == "report":
+            status.write_text(json.dumps({
+                "finished": time.strftime("%Y-%m-%d %H:%M:%S"), "ran": ran,
+                "skipped": skipped, "failed": failed}, indent=2))
         log(f"=== {name} ===")
         t0 = time.time()
-        FUNCS[name](a, P)
+        try:
+            FUNCS[name](a, P)
+        except Exception as e:                   # noqa: BLE001 -- reported below
+            if name == "report":
+                raise
+            failed = {"stage": name, "error": f"{type(e).__name__}: {e}"[:2000],
+                      "log": str(P["logs"] / f"{name}.log")}
+            log(f"STAGE FAILED: {name}: {e}")
+            continue
         marker.write_text(time.strftime("%Y-%m-%d %H:%M:%S"))
+        ran.append(name)
         log(f"{name} finished in {(time.time() - t0) / 60:.1f} min")
 
+    if failed:
+        log(f"pipeline stopped at {failed['stage']} -- REPORT.md says so; "
+            f"log: {failed['log']}")
+        raise SystemExit(1)
     log("pipeline complete -- see outputs/REPORT.md")
 
 
