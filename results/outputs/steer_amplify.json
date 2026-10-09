@@ -1,0 +1,205 @@
+{
+  "rows": [
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": 1.0,
+      "concept_delta": 0.0020263840754826865,
+      "concept_delta_std": 0.0023138328129518513,
+      "prompt_delta": -0.0004464288552602132,
+      "prompt_delta_std": 0.003879527123457072
+    },
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": 2.0,
+      "concept_delta": 0.007262493173281352,
+      "concept_delta_std": 0.004048593530275139,
+      "prompt_delta": -0.003216226895650228,
+      "prompt_delta_std": 0.005691608130015932
+    },
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": 4.0,
+      "concept_delta": 0.03117811679840088,
+      "concept_delta_std": 0.012186254283809038,
+      "prompt_delta": -0.0013694365819295247,
+      "prompt_delta_std": 0.007231846115858903
+    },
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": 8.0,
+      "concept_delta": 0.06390727559725444,
+      "concept_delta_std": 0.00865453502928279,
+      "prompt_delta": -0.0020760993162790933,
+      "prompt_delta_std": 0.008389260965800747
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": 1.0,
+      "concept_delta": -0.0008704115947087606,
+      "concept_delta_std": 0.0013110773189020423,
+      "prompt_delta": -0.002604325612386068,
+      "prompt_delta_std": 0.002912333036766983
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": 2.0,
+      "concept_delta": 0.0038307557503382363,
+      "concept_delta_std": 0.0016180781211280857,
+      "prompt_delta": -0.0043549636999766035,
+      "prompt_delta_std": 0.007902067995759253
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": 4.0,
+      "concept_delta": 0.004639685153961182,
+      "concept_delta_std": 0.0016788344196177758,
+      "prompt_delta": -0.016239126523335774,
+      "prompt_delta_std": 0.00669042966538668
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": 8.0,
+      "concept_delta": 0.017055561145146687,
+      "concept_delta_std": 0.0015828043009321119,
+      "prompt_delta": -0.05101256569226583,
+      "prompt_delta_std": 0.0047086171455297575
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": 1.0,
+      "concept_delta": 0.002962907155354818,
+      "concept_delta_std": 0.0014607604762567187,
+      "prompt_delta": 0.0005244910717010498,
+      "prompt_delta_std": 0.0010753986532607558
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": 2.0,
+      "concept_delta": 0.006085316340128581,
+      "concept_delta_std": 0.0017771946116989712,
+      "prompt_delta": -0.003941078980763753,
+      "prompt_delta_std": 0.0017232288086282555
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": 4.0,
+      "concept_delta": 0.020068660378456116,
+      "concept_delta_std": 0.003928485313274848,
+      "prompt_delta": -0.013727982838948568,
+      "prompt_delta_std": 0.00823476947704158
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": 8.0,
+      "concept_delta": 0.024648581941922505,
+      "concept_delta_std": 0.003505045067099141,
+      "prompt_delta": -0.048216789960861206,
+      "prompt_delta_std": 0.010538111914528159
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": 1.0,
+      "concept_delta": -0.0024438301722208657,
+      "concept_delta_std": 0.003245340481233208,
+      "prompt_delta": -0.003064393997192383,
+      "prompt_delta_std": 0.0037570388515751505
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": 2.0,
+      "concept_delta": -0.00043087701002756756,
+      "concept_delta_std": 0.007274791669751065,
+      "prompt_delta": -0.008067081371943155,
+      "prompt_delta_std": 0.008020044013003874
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": 4.0,
+      "concept_delta": 0.018795008460680645,
+      "concept_delta_std": 0.007764720980389712,
+      "prompt_delta": -0.010114580392837524,
+      "prompt_delta_std": 0.0076429158094139795
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": 8.0,
+      "concept_delta": 0.02341383198897044,
+      "concept_delta_std": 0.004783901363067322,
+      "prompt_delta": -0.03758851687113444,
+      "prompt_delta_std": 0.004405560783582947
+    }
+  ],
+  "report": {
+    "van_gogh": {
+      "feature": 4804,
+      "act_ref": 3.2740295291179335,
+      "best_strength": 8.0,
+      "concept_delta": 0.06390727559725444,
+      "concept_delta_std": 0.00865453502928279,
+      "prompt_delta": -0.0020760993162790933,
+      "prompt_delta_std": 0.008389260965800747,
+      "n_seeds": 3,
+      "n_prompts": 6
+    },
+    "dog": {
+      "feature": 5935,
+      "act_ref": 6.134930545953171,
+      "best_strength": 8.0,
+      "concept_delta": 0.017055561145146687,
+      "concept_delta_std": 0.0015828043009321119,
+      "prompt_delta": -0.05101256569226583,
+      "prompt_delta_std": 0.0047086171455297575,
+      "n_seeds": 3,
+      "n_prompts": 6
+    },
+    "fire": {
+      "feature": 7518,
+      "act_ref": 6.391102773931962,
+      "best_strength": 8.0,
+      "concept_delta": 0.024648581941922505,
+      "concept_delta_std": 0.003505045067099141,
+      "prompt_delta": -0.048216789960861206,
+      "prompt_delta_std": 0.010538111914528159,
+      "n_seeds": 3,
+      "n_prompts": 6
+    },
+    "watercolour": {
+      "feature": 5891,
+      "act_ref": 6.508784786832312,
+      "best_strength": 8.0,
+      "concept_delta": 0.02341383198897044,
+      "concept_delta_std": 0.004783901363067322,
+      "prompt_delta": -0.03758851687113444,
+      "prompt_delta_std": 0.004405560783582947,
+      "n_seeds": 3,
+      "n_prompts": 6
+    }
+  },
+  "strengths": [
+    1.0,
+    2.0,
+    4.0,
+    8.0
+  ],
+  "seeds": [
+    1234,
+    2234,
+    3234
+  ]
+}

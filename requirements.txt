@@ -5,3 +5,4 @@ accelerate>=0.27
 safetensors
 numpy
 pillow
+matplotlib

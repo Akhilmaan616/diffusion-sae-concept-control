@@ -1,0 +1,51 @@
+{
+  "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+  "bucket": 1,
+  "n_tokens": 1032192,
+  "act_scale": 0.8748881045426722,
+  "sae_cfg": {
+    "d_in": 1280,
+    "expansion": 8,
+    "mode": "topk",
+    "k": 32,
+    "k_aux": 256,
+    "aux_coef": 0.03125,
+    "dead_after_tokens": 10000000,
+    "l1_coef": 0.0005,
+    "normalize_decoder": true,
+    "tied_init": true,
+    "seed": 0,
+    "d_hidden": 10240
+  },
+  "train_cfg": {
+    "steps": 15000,
+    "batch_size": 4096,
+    "lr": 0.0003,
+    "warmup_steps": 500,
+    "l1_warmup_steps": 2000,
+    "log_every": 200,
+    "eval_every": 2000,
+    "device": "cuda",
+    "grad_clip": 1.0,
+    "seed": 0,
+    "amp": true
+  },
+  "final": {
+    "step": 14999,
+    "loss": 0.2608477771282196,
+    "lr": 1.4999999999999999e-05,
+    "l0": 32.0,
+    "explained_variance": 0.7520866394042969,
+    "dead_frac": 0.0,
+    "recon_mse": 0.2608477771282196
+  },
+  "density_quantiles": {
+    "0.1": 0.0006835937383584678,
+    "0.5": 0.0016113281017169356,
+    "0.9": 0.005908203311264515,
+    "0.99": 0.02541503868997097
+  },
+  "n_never_fired": 0,
+  "wall_clock_s": 1782.0,
+  "mixed_precision": true
+}

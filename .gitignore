@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
-data/
-runs/
-outputs/grids/
+# pipeline working dirs (top level only -- results/runs holds small summaries we keep)
+/data/
+/runs/
+/runs_out/
+/outputs/grids/
 *.bin
+*.pt
+*.tgz
+*.zip
+.ipynb_checkpoints/

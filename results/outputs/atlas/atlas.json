@@ -1,0 +1,296 @@
+{
+  "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+  "bucket": 1,
+  "n_prompts": 48,
+  "features": [
+    {
+      "feature": 4804,
+      "fire_rate": 0.2708333432674408,
+      "max_activation": 8.788602828979492,
+      "top_prompts": [
+        "watercolour on textured paper, a still life",
+        "swirling impasto brushstrokes, Van Gogh style",
+        "a self portrait in Van Gogh's brushwork",
+        "a wheat field in the style of Van Gogh"
+      ],
+      "top_activations": [
+        8.788602828979492,
+        7.016585350036621,
+        6.212054252624512,
+        6.0190653800964355
+      ],
+      "image": "feature_004804.png"
+    },
+    {
+      "feature": 5935,
+      "fire_rate": 0.3958333432674408,
+      "max_activation": 13.393202781677246,
+      "top_prompts": [
+        "a golden retriever running on grass",
+        "a border collie in a field",
+        "two children playing in a park",
+        "a woman in a yellow raincoat"
+      ],
+      "top_activations": [
+        13.393202781677246,
+        11.921841621398926,
+        11.912891387939453,
+        9.605513572692871
+      ],
+      "image": "feature_005935.png"
+    },
+    {
+      "feature": 7518,
+      "fire_rate": 0.2291666716337204,
+      "max_activation": 20.225170135498047,
+      "top_prompts": [
+        "a burning building with thick smoke",
+        "a campfire at night",
+        "a waterfall in a tropical jungle",
+        "a golden retriever running on grass"
+      ],
+      "top_activations": [
+        20.225170135498047,
+        11.753556251525879,
+        8.453546524047852,
+        8.229755401611328
+      ],
+      "image": "feature_007518.png"
+    },
+    {
+      "feature": 5891,
+      "fire_rate": 0.1458333283662796,
+      "max_activation": 22.558454513549805,
+      "top_prompts": [
+        "a watercolour painting of a harbour",
+        "soft watercolour washes of a coastline",
+        "a watercolour painting of a garden",
+        "watercolour on textured paper, a still life"
+      ],
+      "top_activations": [
+        22.558454513549805,
+        22.370086669921875,
+        17.460378646850586,
+        8.515547752380371
+      ],
+      "image": "feature_005891.png"
+    },
+    {
+      "feature": 8649,
+      "fire_rate": 0.1875,
+      "max_activation": 47.31036376953125,
+      "top_prompts": [
+        "a border collie in a field",
+        "a puppy chasing a ball",
+        "a cat sleeping on a sofa",
+        "a dog wearing a scarf"
+      ],
+      "top_activations": [
+        47.31036376953125,
+        18.498348236083984,
+        14.682731628417969,
+        10.965697288513184
+      ],
+      "image": "feature_008649.png"
+    },
+    {
+      "feature": 3125,
+      "fire_rate": 0.1041666641831398,
+      "max_activation": 45.28268814086914,
+      "top_prompts": [
+        "a dog wearing a scarf",
+        "a border collie in a field",
+        "a golden retriever running on grass",
+        "a puppy chasing a ball"
+      ],
+      "top_activations": [
+        45.28268814086914,
+        33.95254898071289,
+        31.827953338623047,
+        15.874138832092285
+      ],
+      "image": "feature_003125.png"
+    },
+    {
+      "feature": 616,
+      "fire_rate": 0.125,
+      "max_activation": 42.484256744384766,
+      "top_prompts": [
+        "a candle flame in the dark",
+        "a field of sunflowers under blue sky",
+        "watercolour on textured paper, a still life",
+        "a stack of old books and a candle"
+      ],
+      "top_activations": [
+        42.484256744384766,
+        5.6541948318481445,
+        4.018375396728516,
+        2.833062171936035
+      ],
+      "image": "feature_000616.png"
+    },
+    {
+      "feature": 4559,
+      "fire_rate": 0.1041666641831398,
+      "max_activation": 40.98100662231445,
+      "top_prompts": [
+        "a hot air balloon over farmland",
+        "a bowl of fruit on a wooden table",
+        "a self portrait in Van Gogh's brushwork",
+        "a close-up of a mechanical watch"
+      ],
+      "top_activations": [
+        40.98100662231445,
+        5.830427646636963,
+        3.0878801345825195,
+        2.533799886703491
+      ],
+      "image": "feature_004559.png"
+    },
+    {
+      "feature": 9720,
+      "fire_rate": 0.1875,
+      "max_activation": 40.68891906738281,
+      "top_prompts": [
+        "a golden retriever running on grass",
+        "a dog wearing a scarf",
+        "a border collie in a field",
+        "a puppy chasing a ball"
+      ],
+      "top_activations": [
+        40.68891906738281,
+        34.264869689941406,
+        30.113126754760742,
+        23.919715881347656
+      ],
+      "image": "feature_009720.png"
+    },
+    {
+      "feature": 6340,
+      "fire_rate": 0.1666666716337204,
+      "max_activation": 36.9876708984375,
+      "top_prompts": [
+        "a steaming cup of coffee on a windowsill",
+        "watercolour on textured paper, a still life",
+        "a field of sunflowers under blue sky",
+        "a lighthouse on a rocky coast"
+      ],
+      "top_activations": [
+        36.9876708984375,
+        5.4855780601501465,
+        3.357940196990967,
+        2.7450411319732666
+      ],
+      "image": "feature_006340.png"
+    },
+    {
+      "feature": 7768,
+      "fire_rate": 0.1875,
+      "max_activation": 36.535552978515625,
+      "top_prompts": [
+        "a vintage bicycle against a brick wall",
+        "a plate of pasta with basil",
+        "a close-up of a mechanical watch",
+        "a woman in a yellow raincoat"
+      ],
+      "top_activations": [
+        36.535552978515625,
+        4.398832321166992,
+        3.400322914123535,
+        2.9961771965026855
+      ],
+      "image": "feature_007768.png"
+    },
+    {
+      "feature": 3878,
+      "fire_rate": 0.1666666716337204,
+      "max_activation": 36.15361785888672,
+      "top_prompts": [
+        "a bowl of fruit on a wooden table",
+        "watercolour on textured paper, a still life",
+        "a dog wearing a scarf",
+        "a chef plating food in a kitchen"
+      ],
+      "top_activations": [
+        36.15361785888672,
+        15.365867614746094,
+        3.1005401611328125,
+        3.0384511947631836
+      ],
+      "image": "feature_003878.png"
+    },
+    {
+      "feature": 8276,
+      "fire_rate": 0.2083333283662796,
+      "max_activation": 35.734703063964844,
+      "top_prompts": [
+        "a photograph of a city street at night",
+        "a candle flame in the dark",
+        "a campfire at night",
+        "a red sports car parked outside a cafe"
+      ],
+      "top_activations": [
+        35.734703063964844,
+        8.137796401977539,
+        6.268344402313232,
+        4.2408766746521
+      ],
+      "image": "feature_008276.png"
+    },
+    {
+      "feature": 128,
+      "fire_rate": 0.1458333283662796,
+      "max_activation": 35.22550582885742,
+      "top_prompts": [
+        "a candle flame in the dark",
+        "a campfire at night",
+        "a burning building with thick smoke",
+        "a waterfall in a tropical jungle"
+      ],
+      "top_activations": [
+        35.22550582885742,
+        27.403120040893555,
+        11.78945541381836,
+        5.513009071350098
+      ],
+      "image": "feature_000128.png"
+    },
+    {
+      "feature": 9878,
+      "fire_rate": 0.125,
+      "max_activation": 34.078067779541016,
+      "top_prompts": [
+        "a lighthouse on a rocky coast",
+        "a photograph of a city street at night",
+        "a red sports car parked outside a cafe",
+        "a dog sitting on a porch"
+      ],
+      "top_activations": [
+        34.078067779541016,
+        7.668103218078613,
+        5.774575233459473,
+        3.2434568405151367
+      ],
+      "image": "feature_009878.png"
+    },
+    {
+      "feature": 1047,
+      "fire_rate": 0.1875,
+      "max_activation": 33.72517776489258,
+      "top_prompts": [
+        "a woman in a yellow raincoat",
+        "two children playing in a park",
+        "an astronaut floating above earth",
+        "an old man reading a newspaper"
+      ],
+      "top_activations": [
+        33.72517776489258,
+        8.36016845703125,
+        7.626519680023193,
+        6.199703693389893
+      ],
+      "image": "feature_001047.png"
+    }
+  ],
+  "caveat": "correlational evidence only; causality requires stage 4"
+}

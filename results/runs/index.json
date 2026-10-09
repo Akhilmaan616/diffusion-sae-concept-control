@@ -1,0 +1,62 @@
+[
+  {
+    "shard": "up_blocks_1_attentions_1_transformer_blocks_0__b0",
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": "0",
+    "n_tokens": 1161216,
+    "EV": 0.7120336294174194,
+    "L0": 32.0,
+    "dead": 0.0,
+    "never_fired": 0,
+    "act_scale": 0.9108046782273957,
+    "run_dir": "/kaggle/working/project_b/runs/up_blocks_1_attentions_1_transformer_blocks_0__b0"
+  },
+  {
+    "shard": "up_blocks_1_attentions_1_transformer_blocks_0__b1",
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": "1",
+    "n_tokens": 1032192,
+    "EV": 0.7520866394042969,
+    "L0": 32.0,
+    "dead": 0.0,
+    "never_fired": 0,
+    "act_scale": 0.8748881045426722,
+    "run_dir": "/kaggle/working/project_b/runs/up_blocks_1_attentions_1_transformer_blocks_0__b1"
+  },
+  {
+    "shard": "up_blocks_1_attentions_1_transformer_blocks_0__b2",
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": "2",
+    "n_tokens": 1032192,
+    "EV": 0.8159600496292114,
+    "L0": 32.0,
+    "dead": 0.0,
+    "never_fired": 0,
+    "act_scale": 0.8983266828462976,
+    "run_dir": "/kaggle/working/project_b/runs/up_blocks_1_attentions_1_transformer_blocks_0__b2"
+  },
+  {
+    "shard": "up_blocks_1_attentions_1_transformer_blocks_0__bpooled",
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": "pooled",
+    "n_tokens": 3096576,
+    "EV": 0.7192073464393616,
+    "L0": 32.0,
+    "dead": 0.0,
+    "never_fired": 0,
+    "act_scale": 0.8934863077630004,
+    "run_dir": "/kaggle/working/project_b/runs/up_blocks_1_attentions_1_transformer_blocks_0__bpooled"
+  },
+  {
+    "shard": "up_blocks_1_attentions_1_transformer_blocks_0__bpooled_matched",
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": "pooled_matched",
+    "n_tokens": 1032192,
+    "EV": 0.7782739400863647,
+    "L0": 32.0,
+    "dead": 0.0,
+    "never_fired": 0,
+    "act_scale": 0.8920295621033628,
+    "run_dir": "/kaggle/working/project_b/runs/up_blocks_1_attentions_1_transformer_blocks_0__bpooled_matched"
+  }
+]

@@ -1,159 +1,253 @@
-# Sparse Autoencoders for Concept Control in Diffusion Models
+# Sparse Autoencoders for Concept Control in Stable Diffusion
 
-Find interpretable features inside Stable Diffusion's UNet, then use them to add
-or erase concepts at inference time — no fine-tuning of the base model.
+Train sparse autoencoders (SAEs) on Stable Diffusion 1.5's UNet activations, test whether they
+capture what the model actually computes, then use their features to add or remove concepts at
+inference time, with no fine-tuning of the base model.
 
-## Result summary
+Everything runs unattended on free Kaggle GPUs (2× T4), resumes after interruptions, and is covered
+by 28 CPU tests that use a fake pipeline.
 
-| | |
+**Akhil Maan** · M.Tech AI, IIT Gandhinagar
+
+---
+
+## Findings at a glance
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | Where should the SAE go? | **Not the cross-attention output.** There it reached explained variance 0.99, but 82–92% of features were dead and loss recovered was only 0.32–0.45, because the signal is low-rank. At the transformer block's residual stream: 0% dead, loss recovered 0.55–0.81. |
+| 2 | One SAE for all timesteps, or one per timestep range? | **Depends on what you hold fixed.** With the same data per SAE, per-timestep SAEs win by 0.05–0.08 loss recovered. With the same *total* data, one pooled SAE matches or beats them with a third of the parameters. |
+| 3 | Do the features cause anything? | **Yes, for adding.** Adding one "Van Gogh" feature raises CLIP similarity to the style by +0.064 ± 0.009 (3 seeds), with no loss of prompt fidelity, and the effect grows with strength. |
+| 4 | Can they erase a concept? | **No, not at a single layer.** Zeroing the top 20 concept features, or pushing them to −1, changes the activations by up to 50% but leaves the concept intact. A random-feature control behaves the same. |
+
+The asymmetry in rows 3 and 4 is the central result. This layer is **sufficient to add** a concept
+but **not necessary** for it. The most likely reason is that the prompt re-injects the concept through
+cross-attention in every later block at every denoising step.
+
+---
+
+## Method
+
+```
+prompts ─► SD 1.5 (DDIM, 25 steps, CFG 7.5)
+              │  forward hook on up_blocks.1.attentions.1.transformer_blocks.0 (16×16×1280)
+              │  keep the conditional half of the CFG batch, tag each token with its timestep
+              ▼
+   activation shards, split by timestep regime:  texture t<334 · structure 334–667 · composition t≥667
+              ▼
+   TopK SAEs (k = 32, 10,240 features):  3 per-timestep · 1 pooled · 1 pooled with matched data
+              ▼
+   evaluation ladder
+     1. reconstruction      explained variance, dead features
+     2. faithfulness        splice the SAE into the UNet; loss recovered vs ablating the layer
+     3. location            per-feature AUC on concept vs neutral prompts (correlational only)
+     4. causation           add a feature on neutral prompts / remove features on concept prompts,
+                            scored with CLIP ViT-B/32 (not SD's own text encoder), paired by seed
+```
+
+**Loss recovered** = (ablated − substituted) / (ablated − clean). It is the denoising loss with the
+SAE reconstruction spliced in, relative to replacing the layer with its spatial mean. A score of 1
+means the model loses nothing; 0 means the SAE is no better than deleting the layer. This is the
+diffusion analogue of "cross-entropy recovered" in language-model interpretability, and it is the
+metric explained variance cannot replace (see finding 1).
+
+---
+
+## Results
+
+All numbers come from [`results/outputs/REPORT.md`](results/outputs/REPORT.md). Every
+intervention is scored as a paired difference (edited minus unedited, same seed, same prompts),
+reported as mean ± std over 3 seeds. Erasure is evaluated on prompts never used to select the
+features.
+
+### 1. The site matters more than the hyperparameters
+
+| | Run 1: cross-attention output | Run 2: transformer residual stream | SAeUron (reference) |
+|---|---|---|---|
+| Explained variance | 0.985 – 0.988 | 0.71 – 0.82 | ≈ 0.81 |
+| Dead features | 82 – 92% | **0%** | some |
+| Loss recovered | 0.32 – 0.45 | **0.55 – 0.81** | not reported |
+
+Each cross-attention head outputs a weighted average of the prompt's 77 value vectors, so every token
+at that site lies in a small, prompt-spanned subspace. That signal is easy to reconstruct (high EV)
+and needs few features (dead dictionary), but the SAE drops the small directions the next layer
+reads (low loss recovered). Moving to the residual stream lowered EV and raised faithfulness, the
+clearest demonstration in this project that **explained variance is not faithfulness**.
+
+### 2. Pooled vs per-timestep SAEs
+
+![loss recovered](assets/fig_loss_recovered.png)
+
+| Loss recovered | texture | structure | composition |
+|---|---|---|---|
+| per-timestep SAE (1M tokens each) | 0.633 ± 0.013 | 0.651 ± 0.008 | 0.721 ± 0.023 |
+| pooled SAE, matched data (1M) | 0.550 ± 0.005 | 0.586 ± 0.011 | 0.676 ± 0.026 |
+| pooled SAE, all data (3M) | 0.636 ± 0.010 | 0.678 ± 0.006 | 0.808 ± 0.029 |
+
+- **Same data per SAE:** specialisation wins by 0.083 and 0.065 in the first two regimes (several
+  times the error bars). In the third the 0.045 gap is within noise.
+- **Same total data:** one pooled SAE ties or wins everywhere, with a third of the parameters.
+- **Caveat:** ablating this layer only costs 0.9–1.6% of the clean loss, because the transformer's
+  outer skip connection still carries the ResNet features. In absolute terms, splicing the SAE in
+  raises the denoising loss by 0.3–0.6%. The ratios are precise (small ±), but they are ratios of
+  small numbers.
+
+### 3. Amplification: adding one feature
+
+![amplification dose-response](assets/fig_amplify_dose.png)
+
+![amplification images](assets/img_amplify.jpg)
+
+Each feature direction is added at every spatial position, at multiples of its typical activation,
+on six neutral prompts. The images show the first one, "a photograph of a city street at night".
+
+- **Van Gogh** (feature 4804) rises steadily: +0.002, +0.007, +0.031, then +0.064. Prompt fidelity
+  stays flat, and the image becomes painterly and saturated while keeping its layout.
+- **The other three are less clean, and the pictures show why.** The "dog" feature produces fur or
+  grass-like texture, not a dog. "Fire" produces smoke and warm glow. "Watercolour" produces a soft,
+  flat render. CLIP rises a little, but prompt fidelity falls faster. These features are
+  *concept-correlated textures*, not concepts. Selecting features by AUC finds what co-occurs with
+  a concept, and only a causal test plus looking at the images shows what it does.
+
+### 4. Erasure: a dose-response study
+
+![amplify vs erase](assets/fig_amplify_vs_erase.png)
+
+![erasure images](assets/img_erase.jpg)
+
+| Setting (per concept, at every step) | Change to activations | Concept CLIP Δ |
+|---|---|---|
+| top-5 / 10 / 20 features → 0 | 5 – 27% | within noise (largest −0.002) |
+| top-20 features → −1 | 22 – 50% | at most −0.009 ± 0.004 (fire, one SAE only) |
+| control: 20 other active features → 0 | 6 – 27% | within noise |
+| near-neighbour holdout prompts | | within ±0.008 in every setting |
+
+Same result with the per-timestep SAE and the pooled SAE, so it is not an artefact of applying a
+bucket-specific SAE outside its timestep range. The images make the point. The edits change details
+(the dog's breed, its colours, the brushwork), but never whether the concept is there.
+
+**Why erasure fails while adding works (hypothesis, not yet tested):**
+
+- The concept is spread over many features; the top feature fires on only 17–56% of concept tokens.
+- The SAE's error term (roughly 20–30% of the variance) passes through untouched.
+- Most importantly, cross-attention in every later block re-reads the concept from the prompt at
+  every step.
+
+Adding a direction is a push the network cannot undo; removing one carrier among many gets
+compensated.
+
+---
+
+## Limitations
+
+| Limitation | Next step |
 |---|---|
-| Dictionary recovery (synthetic ground truth) | **100%** of true features at cos > 0.9, EV 0.963 |
-| TopK vs L1 at matched sparsity | see [`outputs/l1_vs_topk.md`](outputs/l1_vs_topk.md) |
-| SAE on SD1.5 cross-attention | _pending GPU run_ |
-| Causal steering (concept gain vs collateral) | _pending GPU run_ |
-| Erasure vs ESD/UCE | _day 2_ |
+| One model (SD 1.5), one site per run | Repeat at the full attention-block output and in SDXL |
+| CLIP similarity as the concept score | A per-concept classifier and a small human check |
+| Generic training prompts, not concept-rich | Train on prompts that include the target concepts |
+| Erasure tested at one layer, error term preserved | Edit several blocks; drop `preserve_error` for erasure |
+| No UnlearnCanvas benchmark | Compare against ESD and UCE on UnlearnCanvas |
+| Small ablation cost at this site | Report absolute loss changes next to every ratio (done here) |
 
-## The claim, and the evidence required for it
+---
 
-The claim is "these are features the model uses". Three levels of evidence, and
-only the third supports that claim:
+## How the project got here (two runs)
 
-1. **Reconstruction** — necessary, not sufficient. PCA gets high explained
-   variance and PCA components are not features.
-2. **Substitution** — splice the SAE reconstruction back into the UNet and
-   measure the model's *own* denoising loss. Reported as *loss recovered*
-   relative to ablating the layer, because substituted loss alone tells you
-   nothing about how much that layer mattered.
-3. **Causal intervention** — amplify the feature and check the concept appears;
-   erase it and check the concept goes *and* that near-neighbour prompts
-   survive. A feature that fires on dogs but does nothing when amplified is a
-   correlate, not a cause.
+**Run 1** used the cross-attention output and produced numbers that looked good and were wrong in
+instructive ways: EV 0.99 with a mostly dead dictionary. Its steering results were invalid because of
+five bugs, now each pinned by a regression test:
 
-Stage 3 of the pipeline outputs **candidate** features. They are not called
-concept features until stage 4 passes.
+1. The activation scale was accepted but never applied.
+2. "Amplify" used a clamp that only touches positions where the feature is already active.
+3. The holdout prompts were compared against the wrong baseline.
+4. Erasure was scored on the prompts used to select the feature.
+5. Only one seed was run.
 
-## Two design decisions worth defending
+The data budget was also half the planned size (about 50 tokens per feature instead of 100).
 
-**TopK over L1.** Sparsity as a constraint rather than a penalty: no shrinkage,
-and L0 is set rather than tuned. The measured justification is in
-`outputs/l1_vs_topk.md` — on a synthetic problem with true k=3, TopK reaches
-EV 0.963 at L0 4, while no L1 λ achieves both (λ=0.002 → EV 0.968 but L0 53;
-λ=0.1 → L0 8.2 but EV 0.533).
+**Run 2** moved to the residual stream, doubled the data, and added:
 
-**One SAE per timestep bucket.** A diffusion UNet evaluates the same weights at
-~50 noise levels doing different jobs — composition at high t, texture at low t.
-Fitting one SAE to that mixture yields features that average incompatible
-regimes. Buckets keep the regimes separate and make the difference between them
-directly observable by comparing atlases. See the header of `sae/hooks.py`.
+- the matched-data pooled SAE, which separates "more data" from "one SAE for all timesteps";
+- four noise draws for faithfulness, reported with the raw losses;
+- three seeds with paired deltas for every intervention.
 
-## Two implementation details that silently break things
+The erasure dose-response was added on top of run 2 without retraining.
 
-**Classifier-free guidance doubles the batch.** Half of every captured tensor is
-the unconditional pass, which contains no prompt information. `cond_only=True`
-keeps the conditional half. Without it, roughly half the training data teaches
-the SAE the unconditional mean.
+---
 
-**Reconstruction error must be preserved during steering.** Replacing an
-activation with `decode(edit(encode(x)))` discards the SAE's reconstruction
-error on every token, edited or not. The fix is `decode(edit(encode(x))) + (x -
-decode(encode(x)))`, which makes an empty edit exactly the identity. The unit
-test `test_error_preservation_matters` shows a no-op edit perturbing the
-activation by 59% of its norm without this.
+## Reproduce
 
-## Pipeline
+**On Kaggle (recommended):** import [`notebooks/project_b_unattended.ipynb`](notebooks/project_b_unattended.ipynb),
+set *Accelerator: GPU T4 ×2* and *Internet: On*, then *Save Version → Save & Run All*. The notebook
+contains the whole repo, runs the tests, then runs every stage. A full run takes about 5–7 hours, and
+the results land in `project_b/outputs/REPORT.md`. To continue a stopped run, attach the previous
+version's output as an input and run again. Finished stages are skipped.
+
+**Anywhere else:**
 
 ```bash
-python scripts/01_capture.py --out data/acts --n-images 400 --steps 25 --all-sites
-python scripts/02_train.py   --acts data/acts --out runs --steps 20000
-python scripts/03_locate.py  --sae runs/<shard>/sae.pt --site <site> --bucket <b> \
-                             --act-scale <from runs/<shard>/summary.json>
-python scripts/04_steer.py   --sae runs/<shard>/sae.pt --site <site> \
-                             --act-scale <scale> --mode amplify
-python scripts/04_steer.py   ... --mode erase
+pip install -r requirements.txt
+python scripts/run_pipeline.py --root runs_out            # all 12 stages, resumable
+python scripts/make_figures.py --results results --out assets
 ```
 
-`act_scale` matters: training normalises activations so E‖x‖ = √d, and the
-steering hook sees raw activations, so it has to undo that. It is written to
-`runs/<shard>/summary.json`.
+**Stages:** prefetch → capture → merge → pool → train → locate → atlas → substitute → amplify →
+erase → erase_multi → report. Each writes `state/<stage>.done`. If one fails, later stages stop, and
+the report is still rebuilt with the failure stated at the top.
 
-## Layout
-
-```
-sae/model.py     TopK and L1 SAEs, dead-latent aux loss, decoder-norm handling
-sae/hooks.py     UNet capture + steering hooks; the timestep and CFG discussion
-sae/data.py      shard writer, memmap store, shuffling buffer, normalisation
-sae/train.py     training loop and metrics
-sae/metrics.py   the three evidence levels
-sae/prompts.py   discovery / probe / holdout corpora, kept separate on purpose
-tests/           12 tests, all on synthetic data — no GPU or weights needed
-```
-
-## Tests
+**Tests (CPU, no weights, about 20 minutes for both passes):**
 
 ```bash
-python tests/test_core.py      # 14 core tests
-python tests/test_stages.py    # 4 atlas/substitution tests
-python tests/test_pipeline.py  # 8 resume/merge/orchestrator/end-to-end tests
+bash tests/run_all.sh      # 28 tests, run twice: normally and with a pretend-GPU shim
 ```
 
-The one that matters is `test_sae_recovers_known_dictionary`: data is generated
-from a known sparse dictionary and the learned decoder columns are matched
-against the true ones. If that fails nothing downstream is trustworthy.
+The tests cover:
 
-## Notes
+- an SAE recovering a known synthetic dictionary;
+- exact timestep attribution;
+- byte-identical capture resume after a kill;
+- all 12 stages end to end with a fake pipeline;
+- seeding a finished run so that only a new stage runs;
+- a forced crash that must appear in the report.
 
-`runwayml/stable-diffusion-v1-5` was removed from the HuggingFace Hub; the live
-mirror is `stable-diffusion-v1-5/stable-diffusion-v1-5`.
+The SAE weights (5 × 105 MB) are not in the repo; they exceed GitHub's file limit. They are
+reproduced by the pipeline, or can be attached to a release.
 
-CLIP scoring deliberately uses ViT-B/32, not SD1.5's own ViT-L/14 text encoder.
-Scoring with the model's own conditioning encoder measures how well you
-satisfied its training objective, which is circular.
+---
 
-## Running unattended (Kaggle background run, Colab, any terminal)
+## Engineering notes
 
-```bash
-python scripts/run_pipeline.py --root /kaggle/working/project_b
+- **Unattended and resumable at three levels:** stage markers, per-batch capture checkpoints that
+  truncate a torn final batch, and per-SAE training skips. Resuming checks that the previous run
+  captured the same layer.
+- **Two GPUs:** capture runs one process per GPU, and the shards are merged as JSON manifests
+  (no copying) to stay inside Kaggle's 20 GB working disk. SAE training and the two erasure arms are
+  split across GPUs.
+- **fp16 mixed precision** for SAE training (a T4 has fp16 tensor cores, but no bf16 or TF32).
+- **TopK over L1:** on a synthetic problem with a known dictionary, TopK reaches EV 0.963 at L0 ≈ 4,
+  while no L1 coefficient gets both sparsity and reconstruction
+  ([`outputs/l1_vs_topk.md`](outputs/l1_vs_topk.md)).
+- **Correctness details:**
+  - Only the conditional half of the CFG batch is captured.
+  - Timesteps are read from the UNet's own arguments, not the sampler callback, which is one step
+    late.
+  - Steering preserves the SAE error term, so an empty edit is exactly the identity.
+  - CLIP scoring uses ViT-B/32, not SD's own ViT-L/14 text encoder, to avoid circularity.
+
+## Repository layout
+
+```
+sae/                 library: SAE model, hooks, data store, training, metrics, prompts, loader
+scripts/01–07        pipeline stages; run_pipeline.py orchestrates; make_figures.py builds assets/
+notebooks/           the self-contained Kaggle/Colab notebook
+results/             REPORT.md, every JSON result, SAE training summaries, image grids
+assets/              README figures
+tests/               28 CPU tests with a fake pipeline
 ```
 
-Runs every stage end to end: prefetch, capture, merge, pool, train, locate, atlas,
-substitute, amplify, erase, report. Everything lands in `outputs/REPORT.md`.
+## References
 
-- **Uses both GPUs** when present. Capture runs one process per GPU with different
-  seeds, then `merge_shards.py` joins them. The four SAEs train two per GPU.
-- **Resumable at three levels.** Each stage writes `state/<stage>.done`. Capture
-  checkpoints after every batch, so a killed run resumes **byte-identically**, and a
-  half-written batch is truncated away rather than kept twice. Training skips any
-  SAE that's already saved. Re-run the same command to continue.
-- **No data copying.** Merged and pooled shards are JSON manifests that point at the
-  per-GPU files, which keeps ~8 GB of activations inside Kaggle's 20 GB working dir.
-- **fp16 mixed precision** for SAE training. A T4 has fp16 tensor cores but no bf16 or
-  TF32, so this is its biggest available speed-up. `--no-amp` falls back to fp32.
-- **Capture skips the VAE decode** (`output_type="latent"`), since nothing needs pixels.
-
-On Kaggle use *Save Version → Save & Run All*: it runs in the background with the
-browser closed, with a 12 h limit (the GPU quota is 30 h/week). Free Colab has no
-background execution and a single GPU. The notebook keeps results on Drive there,
-so only an interruption during capture or training costs a redo.
-
-Tests for all of this run on CPU with a fake pipeline (`--model __fake__`):
-
-```bash
-python tests/test_core.py && python tests/test_stages.py && python tests/test_pipeline.py   # 26 tests
-```
-
-## Local checkpoint (partial HuggingFace cache)
-
-`sae/loader.py` handles a cache that has real weights but no pipeline manifest:
-
-```bash
-python -m sae.loader "C:/Users/akhil/ife_thesis/models/models--runwayml--stable-diffusion-v1-5"
-python -m sae.loader "<same path>" --repair     # writes model_index.json + scheduler/
-```
-
-Without `--repair` the loader still works — it assembles the pipeline from
-components and reconstructs a DDIM scheduler from the published SD1.5 config
-(`scaled_linear` betas 0.00085→0.012, `steps_offset=1`,
-`set_alpha_to_one=False`). Those three values are not the diffusers defaults and
-getting them wrong produces subtly wrong samples rather than an error.
-
-Pass the cache path as `--model` to any pipeline script to run fully offline.
+- B. Cywiński and K. Deja, *SAeUron: Interpretable Concept Unlearning in Diffusion Models with
+  Sparse Autoencoders*, ICML 2025.
+- L. Gao et al., *Scaling and Evaluating Sparse Autoencoders* (TopK SAEs), 2024.
+- R. Rombach et al., *High-Resolution Image Synthesis with Latent Diffusion Models*, CVPR 2022.

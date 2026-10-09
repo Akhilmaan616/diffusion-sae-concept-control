@@ -1,0 +1,398 @@
+{
+  "bucketed_b0": {
+    "clean": 0.3413241083423297,
+    "substituted": 0.342390692482392,
+    "ablated": 0.3442299384623766,
+    "loss_recovered": 0.6329502772016445,
+    "loss_recovered_std": 0.013335647507454787,
+    "ablation_cost_rel": 0.008513404265990272,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 0,
+    "timestep_range": [
+      13,
+      320
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.34030598029494286,
+        "substituted": 0.3414137164751689,
+        "ablated": 0.3432670471568902,
+        "loss_recovered": 0.6258996395989792
+      },
+      {
+        "clean": 0.34215307980775833,
+        "substituted": 0.3432118433217208,
+        "ablated": 0.3449879524608453,
+        "loss_recovered": 0.6265216665695608
+      },
+      {
+        "clean": 0.34107908482352894,
+        "substituted": 0.3420642701288064,
+        "ablated": 0.34394383803009987,
+        "loss_recovered": 0.6561011597725989
+      },
+      {
+        "clean": 0.34175828844308853,
+        "substituted": 0.3428729400038719,
+        "ablated": 0.34472091620167095,
+        "loss_recovered": 0.6237625339348285
+      }
+    ]
+  },
+  "pooled_b0": {
+    "clean": 0.3413241083423297,
+    "substituted": 0.3423815450320641,
+    "ablated": 0.3442299384623766,
+    "loss_recovered": 0.6360982417935255,
+    "loss_recovered_std": 0.00954979458246987,
+    "ablation_cost_rel": 0.008513404265990272,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 0,
+    "timestep_range": [
+      13,
+      320
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.34030598029494286,
+        "substituted": 0.34138238926728565,
+        "ablated": 0.3432670471568902,
+        "loss_recovered": 0.6364793425721953
+      },
+      {
+        "clean": 0.34215307980775833,
+        "substituted": 0.3431555653611819,
+        "ablated": 0.3449879524608453,
+        "loss_recovered": 0.6463736907786841
+      },
+      {
+        "clean": 0.34107908482352894,
+        "substituted": 0.342106690009435,
+        "ablated": 0.34394383803009987,
+        "loss_recovered": 0.6412936431839843
+      },
+      {
+        "clean": 0.34175828844308853,
+        "substituted": 0.3428815354903539,
+        "ablated": 0.34472091620167095,
+        "loss_recovered": 0.6208612290182504
+      }
+    ]
+  },
+  "pooled_matched_b0": {
+    "clean": 0.3413241083423297,
+    "substituted": 0.3426324715837836,
+    "ablated": 0.3442299384623766,
+    "loss_recovered": 0.5497454471175957,
+    "loss_recovered_std": 0.005345803030667979,
+    "ablation_cost_rel": 0.008513404265990272,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 0,
+    "timestep_range": [
+      13,
+      320
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.34030598029494286,
+        "substituted": 0.34162716567516327,
+        "ablated": 0.3432670471568902,
+        "loss_recovered": 0.5538144048015418
+      },
+      {
+        "clean": 0.34215307980775833,
+        "substituted": 0.34342806537946063,
+        "ablated": 0.3449879524608453,
+        "loss_recovered": 0.550249437020058
+      },
+      {
+        "clean": 0.34107908482352894,
+        "substituted": 0.34235627700885135,
+        "ablated": 0.34394383803009987,
+        "loss_recovered": 0.5541702571820522
+      },
+      {
+        "clean": 0.34175828844308853,
+        "substituted": 0.3431183782716592,
+        "ablated": 0.34472091620167095,
+        "loss_recovered": 0.5409177462033051
+      }
+    ]
+  },
+  "bucketed_b1": {
+    "clean": 0.09582632950817546,
+    "substituted": 0.09633376480390628,
+    "ablated": 0.09727994158553581,
+    "loss_recovered": 0.6509142269564239,
+    "loss_recovered_std": 0.007741924429642256,
+    "ablation_cost_rel": 0.015169234643765957,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 1,
+    "timestep_range": [
+      347,
+      653
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.09522758952031533,
+        "substituted": 0.0957241312911113,
+        "ablated": 0.09661000904937585,
+        "loss_recovered": 0.6408168718989238
+      },
+      {
+        "clean": 0.09597031710048516,
+        "substituted": 0.09650092013180256,
+        "ablated": 0.0974836153909564,
+        "loss_recovered": 0.6493731376963573
+      },
+      {
+        "clean": 0.09607071770975988,
+        "substituted": 0.0965411327779293,
+        "ablated": 0.09746475114176671,
+        "loss_recovered": 0.6625510856707176
+      },
+      {
+        "clean": 0.09603669370214145,
+        "substituted": 0.09656887501478195,
+        "ablated": 0.09756139076004426,
+        "loss_recovered": 0.6509593103219422
+      }
+    ]
+  },
+  "pooled_b1": {
+    "clean": 0.09582632950817546,
+    "substituted": 0.09629381797276437,
+    "ablated": 0.09727994158553581,
+    "loss_recovered": 0.6783953078885835,
+    "loss_recovered_std": 0.006369874594533687,
+    "ablation_cost_rel": 0.015169234643765957,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 1,
+    "timestep_range": [
+      347,
+      653
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.09522758952031533,
+        "substituted": 0.0956831822792689,
+        "ablated": 0.09661000904937585,
+        "loss_recovered": 0.6704381344618372
+      },
+      {
+        "clean": 0.09597031710048516,
+        "substituted": 0.09644626391430695,
+        "ablated": 0.0974836153909564,
+        "loss_recovered": 0.6854904173098729
+      },
+      {
+        "clean": 0.09607071770975988,
+        "substituted": 0.09652612327287595,
+        "ablated": 0.09746475114176671,
+        "loss_recovered": 0.6733180477167778
+      },
+      {
+        "clean": 0.09603669370214145,
+        "substituted": 0.09651970242460568,
+        "ablated": 0.09756139076004426,
+        "loss_recovered": 0.6832100383740478
+      }
+    ]
+  },
+  "pooled_matched_b1": {
+    "clean": 0.09582632950817546,
+    "substituted": 0.09642742248252034,
+    "ablated": 0.09727994158553581,
+    "loss_recovered": 0.5864832277422868,
+    "loss_recovered_std": 0.010893665158085241,
+    "ablation_cost_rel": 0.015169234643765957,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 1,
+    "timestep_range": [
+      347,
+      653
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.09522758952031533,
+        "substituted": 0.09582212474197149,
+        "ablated": 0.09661000904937585,
+        "loss_recovered": 0.569931407103166
+      },
+      {
+        "clean": 0.09597031710048516,
+        "substituted": 0.09659067541360855,
+        "ablated": 0.0974836153909564,
+        "loss_recovered": 0.5900621067045477
+      },
+      {
+        "clean": 0.09607071770975988,
+        "substituted": 0.09662811799595754,
+        "ablated": 0.09746475114176671,
+        "loss_recovered": 0.600152856165555
+      },
+      {
+        "clean": 0.09603669370214145,
+        "substituted": 0.09666877177854379,
+        "ablated": 0.09756139076004426,
+        "loss_recovered": 0.5854402203203918
+      }
+    ]
+  },
+  "bucketed_b2": {
+    "clean": 0.015138903739474092,
+    "substituted": 0.015204869889809439,
+    "ablated": 0.015375327158835717,
+    "loss_recovered": 0.7209830121167151,
+    "loss_recovered_std": 0.023312104083602094,
+    "ablation_cost_rel": 0.015616944491506348,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 2,
+    "timestep_range": [
+      680,
+      986
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.014998819679021835,
+        "substituted": 0.015068011591210961,
+        "ablated": 0.0152403386697794,
+        "loss_recovered": 0.7135135751764523
+      },
+      {
+        "clean": 0.015252771069450924,
+        "substituted": 0.015307218476664275,
+        "ablated": 0.015479776775464416,
+        "loss_recovered": 0.7601496095868409
+      },
+      {
+        "clean": 0.015168626656911025,
+        "substituted": 0.015239941635324309,
+        "ablated": 0.015404556295834482,
+        "loss_recovered": 0.6977277685894281
+      },
+      {
+        "clean": 0.015135397552512586,
+        "substituted": 0.015204307856038213,
+        "ablated": 0.01537663689426457,
+        "loss_recovered": 0.7143488163034664
+      }
+    ]
+  },
+  "pooled_b2": {
+    "clean": 0.015138903739474092,
+    "substituted": 0.015184191506705247,
+    "ablated": 0.015375327158835717,
+    "loss_recovered": 0.8084463571610706,
+    "loss_recovered_std": 0.02862773637828601,
+    "ablation_cost_rel": 0.015616944491506348,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 2,
+    "timestep_range": [
+      680,
+      986
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.014998819679021835,
+        "substituted": 0.015050845414710542,
+        "ablated": 0.0152403386697794,
+        "loss_recovered": 0.7845894621970739
+      },
+      {
+        "clean": 0.015252771069450924,
+        "substituted": 0.015285024574647347,
+        "ablated": 0.015479776775464416,
+        "loss_recovered": 0.8579176454951953
+      },
+      {
+        "clean": 0.015168626656911025,
+        "substituted": 0.015216643766810497,
+        "ablated": 0.015404556295834482,
+        "loss_recovered": 0.7964769915362323
+      },
+      {
+        "clean": 0.015135397552512586,
+        "substituted": 0.015184252270652602,
+        "ablated": 0.01537663689426457,
+        "loss_recovered": 0.7974844493223553
+      }
+    ]
+  },
+  "pooled_matched_b2": {
+    "clean": 0.015138903739474092,
+    "substituted": 0.015215574821922928,
+    "ablated": 0.015375327158835717,
+    "loss_recovered": 0.6757043669537535,
+    "loss_recovered_std": 0.02586449796459127,
+    "ablation_cost_rel": 0.015616944491506348,
+    "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+    "bucket": 2,
+    "timestep_range": [
+      680,
+      986
+    ],
+    "all_buckets": false,
+    "n_prompts": 12,
+    "n_timesteps": 12,
+    "n_draws": 4,
+    "per_draw": [
+      {
+        "clean": 0.014998819679021835,
+        "substituted": 0.015081177232787013,
+        "ablated": 0.0152403386697794,
+        "loss_recovered": 0.6590017476188945
+      },
+      {
+        "clean": 0.015252771069450924,
+        "substituted": 0.015316621710856756,
+        "ablated": 0.015479776775464416,
+        "loss_recovered": 0.7187267116446968
+      },
+      {
+        "clean": 0.015168626656911025,
+        "substituted": 0.015245225358133515,
+        "ablated": 0.015404556295834482,
+        "loss_recovered": 0.6753324356701893
+      },
+      {
+        "clean": 0.015135397552512586,
+        "substituted": 0.01521927498591443,
+        "ablated": 0.01537663689426457,
+        "loss_recovered": 0.6523061587190147
+      }
+    ]
+  }
+}

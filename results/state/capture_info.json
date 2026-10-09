@@ -1,0 +1,7 @@
+{
+  "n_images": 1000,
+  "site": "up_blocks.1.attentions.1.transformer_blocks.0",
+  "tokens_per_pass": 1024,
+  "corpus": 512,
+  "capture_batch": 8
+}

@@ -1,0 +1,200 @@
+{
+  "rows": [
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": 0.0,
+      "concept_delta": -0.0008481244246164957,
+      "concept_delta_std": 0.0011727217854238334,
+      "prompt_delta": -0.0014712413152058919,
+      "prompt_delta_std": 0.0014763043428662672,
+      "holdout_prompt_delta": -0.0014393031597137451,
+      "holdout_prompt_delta_std": 0.0016716551417792912
+    },
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": -1.0,
+      "concept_delta": -0.0003288686275482178,
+      "concept_delta_std": 0.00010112507239569162,
+      "prompt_delta": -0.0010770360628763835,
+      "prompt_delta_std": 0.0015140157544346186,
+      "holdout_prompt_delta": -0.0023925602436065674,
+      "holdout_prompt_delta_std": 0.0022175944560886554
+    },
+    {
+      "concept": "van_gogh",
+      "feature": 4804,
+      "strength": -3.0,
+      "concept_delta": 0.0016272862752278645,
+      "concept_delta_std": 0.002340597170708774,
+      "prompt_delta": 0.0012779533863067627,
+      "prompt_delta_std": 0.0013169208206434088,
+      "holdout_prompt_delta": -0.00545993447303772,
+      "holdout_prompt_delta_std": 0.002357101093870349
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": 0.0,
+      "concept_delta": -0.0004754364490509033,
+      "concept_delta_std": 0.0007474101699664697,
+      "prompt_delta": 0.0011400977770487468,
+      "prompt_delta_std": 0.001337087044734729,
+      "holdout_prompt_delta": 0.0011077324549357097,
+      "holdout_prompt_delta_std": 0.0006375256597408671
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": -1.0,
+      "concept_delta": -0.001113995909690857,
+      "concept_delta_std": 0.000310477802859824,
+      "prompt_delta": 0.00042105714480082196,
+      "prompt_delta_std": 0.002393378617726645,
+      "holdout_prompt_delta": 0.0010913511117299397,
+      "holdout_prompt_delta_std": 0.000768460656193786
+    },
+    {
+      "concept": "dog",
+      "feature": 5935,
+      "strength": -3.0,
+      "concept_delta": -3.4203131993611656e-05,
+      "concept_delta_std": 0.0019202269115835653,
+      "prompt_delta": 0.000457763671875,
+      "prompt_delta_std": 0.003233217694543066,
+      "holdout_prompt_delta": 0.0010578632354736328,
+      "holdout_prompt_delta_std": 0.0014819905265671363
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": 0.0,
+      "concept_delta": 4.166861375172933e-05,
+      "concept_delta_std": 0.00020286289813434456,
+      "prompt_delta": 0.00020131468772888184,
+      "prompt_delta_std": 0.0003393884190361952,
+      "holdout_prompt_delta": -0.0019964675108591714,
+      "holdout_prompt_delta_std": 0.0033399883144211127
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": -1.0,
+      "concept_delta": 0.000888437032699585,
+      "concept_delta_std": 0.00012033716307656191,
+      "prompt_delta": 0.0009141862392425537,
+      "prompt_delta_std": 0.000658829461529799,
+      "holdout_prompt_delta": -0.002887427806854248,
+      "holdout_prompt_delta_std": 0.003140340766587328
+    },
+    {
+      "concept": "fire",
+      "feature": 7518,
+      "strength": -3.0,
+      "concept_delta": 0.00048114359378814697,
+      "concept_delta_std": 0.0008701629961035688,
+      "prompt_delta": 0.0004999041557312012,
+      "prompt_delta_std": 0.002290815982611514,
+      "holdout_prompt_delta": -0.003303398688634237,
+      "holdout_prompt_delta_std": 0.0032815146387511645
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": 0.0,
+      "concept_delta": 0.000930627187093099,
+      "concept_delta_std": 0.00438118423766386,
+      "prompt_delta": 0.0016161700089772542,
+      "prompt_delta_std": 0.003591926873956454,
+      "holdout_prompt_delta": 6.53366247812907e-05,
+      "holdout_prompt_delta_std": 0.0003185798624607049
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": -1.0,
+      "concept_delta": 0.000530699888865153,
+      "concept_delta_std": 0.005660507199015358,
+      "prompt_delta": 0.003943483034769694,
+      "prompt_delta_std": 0.004168312339242579,
+      "holdout_prompt_delta": -0.00044475992520650226,
+      "holdout_prompt_delta_std": 0.0003693027675038706
+    },
+    {
+      "concept": "watercolour",
+      "feature": 5891,
+      "strength": -3.0,
+      "concept_delta": -0.000279088815053304,
+      "concept_delta_std": 0.004887537356625692,
+      "prompt_delta": 0.0003560781478881836,
+      "prompt_delta_std": 0.004325474795121295,
+      "holdout_prompt_delta": -0.00140915314356486,
+      "holdout_prompt_delta_std": 0.0005513779323746759
+    }
+  ],
+  "report": {
+    "van_gogh": {
+      "feature": 4804,
+      "act_ref": 3.2740295291179335,
+      "best_strength": 0.0,
+      "concept_delta": -0.0008481244246164957,
+      "concept_delta_std": 0.0011727217854238334,
+      "prompt_delta": -0.0014712413152058919,
+      "prompt_delta_std": 0.0014763043428662672,
+      "holdout_prompt_delta": -0.0014393031597137451,
+      "holdout_prompt_delta_std": 0.0016716551417792912,
+      "n_seeds": 3,
+      "n_prompts": 6
+    },
+    "dog": {
+      "feature": 5935,
+      "act_ref": 6.134930545953171,
+      "best_strength": -1.0,
+      "concept_delta": -0.001113995909690857,
+      "concept_delta_std": 0.000310477802859824,
+      "prompt_delta": 0.00042105714480082196,
+      "prompt_delta_std": 0.002393378617726645,
+      "holdout_prompt_delta": 0.0010913511117299397,
+      "holdout_prompt_delta_std": 0.000768460656193786,
+      "n_seeds": 3,
+      "n_prompts": 6
+    },
+    "fire": {
+      "feature": 7518,
+      "act_ref": 6.391102773931962,
+      "best_strength": 0.0,
+      "concept_delta": 4.166861375172933e-05,
+      "concept_delta_std": 0.00020286289813434456,
+      "prompt_delta": 0.00020131468772888184,
+      "prompt_delta_std": 0.0003393884190361952,
+      "holdout_prompt_delta": -0.0019964675108591714,
+      "holdout_prompt_delta_std": 0.0033399883144211127,
+      "n_seeds": 3,
+      "n_prompts": 6
+    },
+    "watercolour": {
+      "feature": 5891,
+      "act_ref": 6.508784786832312,
+      "best_strength": -3.0,
+      "concept_delta": -0.000279088815053304,
+      "concept_delta_std": 0.004887537356625692,
+      "prompt_delta": 0.0003560781478881836,
+      "prompt_delta_std": 0.004325474795121295,
+      "holdout_prompt_delta": -0.00140915314356486,
+      "holdout_prompt_delta_std": 0.0005513779323746759,
+      "n_seeds": 3,
+      "n_prompts": 6
+    }
+  },
+  "strengths": [
+    0.0,
+    -1.0,
+    -3.0
+  ],
+  "seeds": [
+    1234,
+    2234,
+    3234
+  ]
+}

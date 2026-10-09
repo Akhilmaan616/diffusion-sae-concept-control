@@ -1,0 +1,2 @@
+rows, top to bottom: base, top5, top10, top20, top20_neg, random20
+columns: the first 4 prompts, seed 1234
