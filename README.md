@@ -9,6 +9,8 @@ by 28 CPU tests that use a fake pipeline.
 
 **Akhil Maan** · M.Tech AI, IIT Gandhinagar
 
+**Interactive demo:** https://akhilmaan616.github.io/diffusion-sae-concept-control/ (browse the real outputs: add a concept with one feature, try to remove it with twenty)
+
 ---
 
 ## Findings at a glance

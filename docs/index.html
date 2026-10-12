@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steering Stable Diffusion with Sparse Autoencoders</title>
+<meta name="description" content="Interactive demo: sparse autoencoder features that add a concept to Stable Diffusion images, and why removing them does not erase it.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fcfcfb; --surface: #ffffff; --surface-2: #f3f3f1; --line: #e4e3df;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #7a7974;
+  --accent: #2a78d6; --accent-soft: #e8f0fb;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --good: #1a7f4b; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #33322f;
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8e8d85;
+    --accent: #3987e5; --accent-soft: #1d2a3b;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good: #4cc38a; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --surface-2: #232321; --line: #33322f;
+  --ink: #ffffff; --ink-2: #c3c2b7; --ink-3: #8e8d85;
+  --accent: #3987e5; --accent-soft: #1d2a3b;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --good: #4cc38a; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, h3 { line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 750; }
+h2 { font-size: clamp(22px, 3vw, 28px); font-weight: 700; margin-bottom: 8px; }
+h3 { font-size: 17px; font-weight: 650; }
+p { margin: 0 0 12px; }
+.muted { color: var(--ink-2); }
+.small { font-size: 14px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+
+header.hero { padding: 56px 0 32px; }
+.hero .lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--ink-2); max-width: 760px; margin: 16px 0 24px; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 15px;
+}
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn:hover { text-decoration: none; filter: brightness(0.97); }
+.byline { margin-top: 18px; font-size: 14px; color: var(--ink-3); }
+
+section { padding: 36px 0; border-top: 1px solid var(--line); }
+.section-head { max-width: 760px; margin-bottom: 20px; }
+
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+.step .n { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+  display: grid; place-items: center; font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.step p { font-size: 15px; color: var(--ink-2); margin: 6px 0 0; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.tab {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+}
+.tab[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tab:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.amp-grid { display: grid; grid-template-columns: 1fr 1fr 1.1fr; gap: 16px; align-items: start; }
+figure { margin: 0; }
+figure img { width: 100%; height: auto; display: block; border-radius: 10px; background: var(--surface-2); aspect-ratio: 1/1; }
+figcaption { font-size: 13px; color: var(--ink-3); margin-top: 6px; }
+.slider-row { display: flex; align-items: center; gap: 12px; margin: 16px 0 6px; }
+.slider-row label { font-size: 14px; font-weight: 600; white-space: nowrap; }
+input[type=range] { flex: 1; accent-color: var(--accent); }
+.ticks { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); padding: 0 2px; margin-left: 108px; }
+.readout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.metric { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.metric .k { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.metric .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric .sd { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.note { font-size: 14px; color: var(--ink-2); border-left: 3px solid var(--accent); padding: 4px 0 4px 10px; margin-top: 12px; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart text { fill: var(--ink-3); font-size: 11px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.erase-rows { display: grid; gap: 10px; }
+.erow { display: grid; grid-template-columns: 120px repeat(4, 1fr); gap: 8px; align-items: center; }
+.erow .lab { font-size: 13px; font-weight: 600; color: var(--ink-2); line-height: 1.3; }
+.erow img { width: 100%; height: auto; aspect-ratio: 1/1; border-radius: 8px; display: block; background: var(--surface-2); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 16px; }
+.erase-readout { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
+.stat .big { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.stat .cap { font-size: 14px; color: var(--ink-2); margin-top: 4px; }
+.tip {
+  position: fixed; pointer-events: none; z-index: 10; background: var(--ink); color: var(--bg);
+  font-size: 12px; padding: 6px 8px; border-radius: 6px; opacity: 0; transition: opacity .1s; white-space: nowrap;
+}
+details { margin-top: 10px; }
+summary { cursor: pointer; font-size: 14px; color: var(--accent); font-weight: 600; }
+table { border-collapse: collapse; font-size: 14px; width: 100%; margin-top: 8px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-3); font-weight: 600; }
+ul.plain { padding-left: 20px; margin: 0; color: var(--ink-2); }
+ul.plain li { margin: 6px 0; }
+footer { padding: 32px 0 48px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-3); }
+
+@media (max-width: 820px) {
+  .amp-grid { grid-template-columns: 1fr 1fr; }
+  .amp-side { grid-column: 1 / -1; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .steps { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  header.hero { padding-top: 36px; }
+  .erow { grid-template-columns: repeat(4, 1fr); }
+  .erow .lab { grid-column: 1 / -1; }
+  .erase-readout { grid-template-columns: 1fr; }
+  .ticks { margin-left: 0; }
+  .slider-row { flex-wrap: wrap; }
+  .slider-row label { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Interpretability · Diffusion models</div>
+  <h1>Steering Stable Diffusion with sparse autoencoders</h1>
+  <p class="lede">I trained sparse autoencoders on Stable Diffusion 1.5's internal activations to find
+  features the model actually uses, then turned them up and down inside the running model. Adding one
+  feature paints a scene in Van Gogh's style. Removing twenty doesn't take a concept away. This page lets
+  you browse the real outputs.</p>
+  <div class="btns">
+    <a class="btn primary" href="https://github.com/Akhilmaan616/diffusion-sae-concept-control">Code on GitHub</a>
+    <a class="btn" href="https://github.com/Akhilmaan616/diffusion-sae-concept-control/blob/main/results/outputs/REPORT.md">Full results</a>
+    <a class="btn" href="#demo-add">Jump to the demo</a>
+  </div>
+  <div class="byline">Akhil Maan · M.Tech AI, IIT Gandhinagar</div>
+</header>
+</div>
+
+<section>
+<div class="wrap">
+  <div class="section-head">
+    <h2>The idea in three steps</h2>
+    <p class="muted">Inside the model, every image position is a vector of 1,280 numbers that nobody designed.
+    A sparse autoencoder rewrites each vector as a few "features" picked from a learned dictionary,
+    so they can be read and edited.</p>
+  </div>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h3>Record</h3>
+      <p>Generate 1,000 images and record one UNet layer at every denoising step: about 3.2 million vectors.</p></div>
+    <div class="step"><div class="n">2</div><h3>Decompose</h3>
+      <p>Train a sparse autoencoder with 10,240 features, of which only 32 are active for any one vector.</p></div>
+    <div class="step"><div class="n">3</div><h3>Steer</h3>
+      <p>During generation, add a feature to inject a concept, or switch features off to try to remove one.</p></div>
+  </div>
+</div>
+</section>
+
+<section id="demo-add">
+<div class="wrap">
+  <div class="section-head">
+    <h2>Demo 1: add a concept with one feature</h2>
+    <p class="muted">Same prompt, same seed, same everything. The only change is one feature's direction, added
+    at every position and every step. Pick a feature and drag the strength.</p>
+  </div>
+  <div class="card">
+    <div class="tabs" id="amp-tabs" role="group" aria-label="Feature"></div>
+    <div class="amp-grid">
+      <figure>
+        <img id="amp-base" alt="Unedited image of a city street at night" width="448" height="448">
+        <figcaption>Unedited</figcaption>
+      </figure>
+      <figure>
+        <img id="amp-edit" alt="" width="448" height="448">
+        <figcaption id="amp-cap">Edited</figcaption>
+      </figure>
+      <div class="amp-side">
+        <div class="readout">
+          <div class="metric"><div class="k"><span class="dot" style="background:var(--s1)"></span>Toward the concept</div>
+            <div class="v" id="amp-c">+0.000</div><div class="sd" id="amp-csd"></div></div>
+          <div class="metric"><div class="k"><span class="dot" style="background:var(--s2)"></span>Match to the prompt</div>
+            <div class="v" id="amp-p">+0.000</div><div class="sd" id="amp-psd"></div></div>
+        </div>
+        <div class="legend"><span><span class="dot" style="background:var(--s1)"></span>toward the concept</span>
+          <span><span class="dot" style="background:var(--s2)"></span>match to the prompt</span></div>
+        <div class="chart" id="amp-chart"></div>
+        <div class="small muted">Change in CLIP similarity versus the unedited image, mean ± std over 3 seeds and 6 prompts.</div>
+      </div>
+    </div>
+    <div class="slider-row">
+      <label for="amp-s">Strength: <span id="amp-sv">×8</span></label>
+      <input type="range" id="amp-s" min="0" max="4" step="1" value="4" aria-label="Strength">
+    </div>
+    <div class="ticks"><span>off</span><span>×1</span><span>×2</span><span>×4</span><span>×8</span></div>
+    <p class="note" id="amp-note"></p>
+    <p class="small muted">Prompt: "a photograph of a city street at night", seed 1234. Strength is a multiple of the
+    feature's typical activation.</p>
+  </div>
+</div>
+</section>
+
+<section id="demo-remove">
+<div class="wrap">
+  <div class="section-head">
+    <h2>Demo 2: try to remove a concept</h2>
+    <p class="muted">The reverse experiment: on prompts that ask for the concept, switch off its top 5, 10 or 20
+    features at every step, or push the top 20 negative. As a control, switch off 20 other active features.</p>
+  </div>
+  <div class="card">
+    <div class="tabs" id="er-tabs" role="group" aria-label="Concept"></div>
+    <div class="seg" id="er-seg" role="group" aria-label="Edit"></div>
+    <div class="erase-rows">
+      <div class="erow" id="er-row-base"></div>
+      <div class="erow" id="er-row-edit"></div>
+    </div>
+    <div class="erase-readout">
+      <div class="metric"><div class="k">How much the edit changes the layer</div><div class="v" id="er-size">0%</div></div>
+      <div class="metric"><div class="k">Change toward the concept</div><div class="v" id="er-c">+0.000</div><div class="sd" id="er-csd"></div></div>
+      <div class="metric"><div class="k">Change on look-alike prompts</div><div class="v" id="er-h">+0.000</div><div class="sd">e.g. a wolf, a fox, a cat for "dog"</div></div>
+    </div>
+    <p class="note" id="er-note">Even edits that change the layer's activations by up to half leave the concept in place.
+    Details shift (breed, colours, brushwork) but the dog is still a dog. Compare +0.064 from adding a single feature.</p>
+    <p class="small muted">Pooled SAE, seed 1234, first four evaluation prompts. These prompts were never used to choose the features.</p>
+  </div>
+</div>
+</section>
+
+<section>
+<div class="wrap">
+  <div class="section-head">
+    <h2>What I found</h2>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="big">0%</div><div class="cap">dead features at the residual stream, down from 82–92% at the cross-attention output</div></div>
+    <div class="stat"><div class="big">0.55–0.81</div><div class="cap">of the layer's contribution to denoising survives when the SAE replaces it</div></div>
+    <div class="stat"><div class="big">+0.064</div><div class="cap">CLIP similarity to Van Gogh style from adding one feature, prompt intact</div></div>
+    <div class="stat"><div class="big">≈ 0</div><div class="cap">change from switching off 20 features, same as a random-feature control</div></div>
+  </div>
+
+  <div class="card">
+    <h3>One SAE for all timesteps, or one per phase?</h3>
+    <p class="small muted" style="margin-top:6px">Loss recovered (1 = the model loses nothing) when the SAE's reconstruction
+    replaces the layer, in each phase of generation. Mean ± std over 4 noise draws.</p>
+    <div class="legend" id="lr-legend"></div>
+    <div class="chart" id="lr-chart"></div>
+    <p class="small" style="margin-top:10px"><strong>Same data per SAE:</strong> per-phase SAEs win by 0.05–0.08.
+    <strong>Same total data:</strong> one pooled SAE matches or beats three specialists with a third of the parameters.</p>
+    <details><summary>Show the numbers</summary><div id="lr-table"></div></details>
+  </div>
+</div>
+</section>
+
+<section>
+<div class="wrap">
+  <div class="section-head"><h2>How it was done, briefly</h2></div>
+  <ul class="plain">
+    <li><strong>Model:</strong> Stable Diffusion 1.5, DDIM 25 steps, guidance 7.5. Layer: the transformer block in
+      <code>up_blocks.1.attentions.1</code> (16×16 positions × 1,280 numbers).</li>
+    <li><strong>SAEs:</strong> TopK (k = 32), 10,240 features; one per phase (texture, structure, composition),
+      one pooled, and a pooled control with matched data.</li>
+    <li><strong>Faithfulness:</strong> splice the SAE into the running model and measure the model's own denoising loss
+      against clean and ablated runs.</li>
+    <li><strong>Steering:</strong> edit feature codes and add the SAE's reconstruction error back, so an empty edit changes
+      nothing. Scored with an independent CLIP model, paired by seed, 3 seeds.</li>
+    <li><strong>Engineering:</strong> a 12-stage resumable pipeline that runs unattended on two free Kaggle T4 GPUs,
+      with 28 CPU tests using a fake model.</li>
+  </ul>
+  <p class="small muted" style="margin-top:14px">The images here are saved outputs from those runs; this page lets you browse them
+  and does not run the model in your browser. Limitations: one model and layer, CLIP as the judge, and the "dog", "fire"
+  and "watercolour" features add related textures rather than the objects themselves.</p>
+</div>
+</section>
+
+<footer>
+<div class="wrap">
+  Akhil Maan · <a href="https://github.com/Akhilmaan616/diffusion-sae-concept-control">github.com/Akhilmaan616/diffusion-sae-concept-control</a>
+</div>
+</footer>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+const DATA = {"amplify":{"van_gogh":{"1":{"concept_delta":0.002,"concept_delta_std":0.0023,"prompt_delta":-0.0004,"prompt_delta_std":0.0039},"2":{"concept_delta":0.0073,"concept_delta_std":0.004,"prompt_delta":-0.0032,"prompt_delta_std":0.0057},"4":{"concept_delta":0.0312,"concept_delta_std":0.0122,"prompt_delta":-0.0014,"prompt_delta_std":0.0072},"8":{"concept_delta":0.0639,"concept_delta_std":0.0087,"prompt_delta":-0.0021,"prompt_delta_std":0.0084}},"dog":{"1":{"concept_delta":-0.0009,"concept_delta_std":0.0013,"prompt_delta":-0.0026,"prompt_delta_std":0.0029},"2":{"concept_delta":0.0038,"concept_delta_std":0.0016,"prompt_delta":-0.0044,"prompt_delta_std":0.0079},"4":{"concept_delta":0.0046,"concept_delta_std":0.0017,"prompt_delta":-0.0162,"prompt_delta_std":0.0067},"8":{"concept_delta":0.0171,"concept_delta_std":0.0016,"prompt_delta":-0.051,"prompt_delta_std":0.0047}},"fire":{"1":{"concept_delta":0.003,"concept_delta_std":0.0015,"prompt_delta":0.0005,"prompt_delta_std":0.0011},"2":{"concept_delta":0.0061,"concept_delta_std":0.0018,"prompt_delta":-0.0039,"prompt_delta_std":0.0017},"4":{"concept_delta":0.0201,"concept_delta_std":0.0039,"prompt_delta":-0.0137,"prompt_delta_std":0.0082},"8":{"concept_delta":0.0246,"concept_delta_std":0.0035,"prompt_delta":-0.0482,"prompt_delta_std":0.0105}},"watercolour":{"1":{"concept_delta":-0.0024,"concept_delta_std":0.0032,"prompt_delta":-0.0031,"prompt_delta_std":0.0038},"2":{"concept_delta":-0.0004,"concept_delta_std":0.0073,"prompt_delta":-0.0081,"prompt_delta_std":0.008},"4":{"concept_delta":0.0188,"concept_delta_std":0.0078,"prompt_delta":-0.0101,"prompt_delta_std":0.0076},"8":{"concept_delta":0.0234,"concept_delta_std":0.0048,"prompt_delta":-0.0376,"prompt_delta_std":0.0044}}},"erase":{"van_gogh":{"top5":{"concept_delta":-0.0014,"concept_delta_std":0.0031,"prompt_delta":-0.0032,"holdout_prompt_delta":-0.0022,"edit_rel_norm":0.169},"top10":{"concept_delta":-0.0006,"concept_delta_std":0.0037,"prompt_delta":-0.0027,"holdout_prompt_delta":-0.003,"edit_rel_norm":0.1767},"top20":{"concept_delta":0.0005,"concept_delta_std":0.0038,"prompt_delta":-0.0015,"holdout_prompt_delta":-0.0013,"edit_rel_norm":0.1911},"top20_neg":{"concept_delta":0.0011,"concept_delta_std":0.002,"prompt_delta":-0.0039,"holdout_prompt_delta":-0.0023,"edit_rel_norm":0.376},"random20":{"concept_delta":0.0011,"concept_delta_std":0.0006,"prompt_delta":0.0008,"holdout_prompt_delta":0.0011,"edit_rel_norm":0.0547}},"dog":{"top5":{"concept_delta":0.0,"concept_delta_std":0.0016,"prompt_delta":-0.0007,"holdout_prompt_delta":0.0003,"edit_rel_norm":0.0563},"top10":{"concept_delta":-0.0003,"concept_delta_std":0.0012,"prompt_delta":0.0002,"holdout_prompt_delta":0.0005,"edit_rel_norm":0.0834},"top20":{"concept_delta":0.0014,"concept_delta_std":0.0002,"prompt_delta":-0.001,"holdout_prompt_delta":0.0007,"edit_rel_norm":0.1206},"top20_neg":{"concept_delta":-0.0001,"concept_delta_std":0.002,"prompt_delta":-0.0036,"holdout_prompt_delta":-0.0049,"edit_rel_norm":0.2235},"random20":{"concept_delta":0.0003,"concept_delta_std":0.0009,"prompt_delta":0.0004,"holdout_prompt_delta":0.0002,"edit_rel_norm":0.0879}},"fire":{"top5":{"concept_delta":0.0003,"concept_delta_std":0.0002,"prompt_delta":-0.0,"holdout_prompt_delta":-0.0033,"edit_rel_norm":0.076},"top10":{"concept_delta":0.0006,"concept_delta_std":0.0003,"prompt_delta":0.001,"holdout_prompt_delta":-0.003,"edit_rel_norm":0.1101},"top20":{"concept_delta":-0.0002,"concept_delta_std":0.0006,"prompt_delta":0.0024,"holdout_prompt_delta":0.003,"edit_rel_norm":0.1364},"top20_neg":{"concept_delta":-0.0013,"concept_delta_std":0.0031,"prompt_delta":0.0067,"holdout_prompt_delta":-0.0025,"edit_rel_norm":0.2307},"random20":{"concept_delta":-0.0014,"concept_delta_std":0.0012,"prompt_delta":0.0011,"holdout_prompt_delta":0.0005,"edit_rel_norm":0.0929}},"watercolour":{"top5":{"concept_delta":-0.0007,"concept_delta_std":0.0029,"prompt_delta":0.0046,"holdout_prompt_delta":-0.0044,"edit_rel_norm":0.2438},"top10":{"concept_delta":-0.0009,"concept_delta_std":0.0038,"prompt_delta":0.0015,"holdout_prompt_delta":-0.0046,"edit_rel_norm":0.2507},"top20":{"concept_delta":0.0006,"concept_delta_std":0.0025,"prompt_delta":0.0027,"holdout_prompt_delta":-0.0037,"edit_rel_norm":0.2648},"top20_neg":{"concept_delta":0.0,"concept_delta_std":0.0026,"prompt_delta":-0.0016,"holdout_prompt_delta":-0.0044,"edit_rel_norm":0.4993},"random20":{"concept_delta":-0.0002,"concept_delta_std":0.0007,"prompt_delta":0.0018,"holdout_prompt_delta":-0.001,"edit_rel_norm":0.0724}}},"faith":{"bucketed_b0":{"lr":0.633,"sd":0.013},"pooled_b0":{"lr":0.636,"sd":0.01},"pooled_matched_b0":{"lr":0.55,"sd":0.005},"bucketed_b1":{"lr":0.651,"sd":0.008},"pooled_b1":{"lr":0.678,"sd":0.006},"pooled_matched_b1":{"lr":0.586,"sd":0.011},"bucketed_b2":{"lr":0.721,"sd":0.023},"pooled_b2":{"lr":0.808,"sd":0.029},"pooled_matched_b2":{"lr":0.676,"sd":0.026}}};
+const NAMES = { van_gogh: "Van Gogh", dog: "dog", fire: "fire", watercolour: "watercolour" };
+const FEAT = { van_gogh: 4804, dog: 5935, fire: 7518, watercolour: 5891 };
+const STRENGTHS = ["0", "1", "2", "4", "8"];
+const NOTES = {
+  van_gogh: "A clean causal effect: the score rises steadily with strength (+0.002, +0.007, +0.031, +0.064) while the match to the prompt stays flat. The street keeps its layout and turns painterly.",
+  dog: "No dog appears. The feature adds fur- or grass-like strands: it was picked because it co-occurs with dog pictures (dogs on grass), not because it means \"dog\". The prompt match drops three times faster than the concept rises.",
+  fire: "Smoke, haze and a warm glow rather than flames. The concept score rises, but the image drifts away from the prompt faster.",
+  watercolour: "A soft, flat, pastel render rather than real watercolour. Correlated with the concept, not the concept itself."
+};
+const ERASE_SETTINGS = [
+  ["top5", "Top 5 off"], ["top10", "Top 10 off"], ["top20", "Top 20 off"],
+  ["top20_neg", "Top 20 pushed negative"], ["random20", "Control: 20 other features off"]
+];
+const tip = document.getElementById("tip");
+const fmt = (x, d = 3) => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(d);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1; moveTip(e); }
+function moveTip(e) {
+  const pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY - h - pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y < 8) y = e.clientY + pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function hideTip() { tip.style.opacity = 0; }
+
+function tabs(el, keys, labels, onPick, initial) {
+  el.innerHTML = "";
+  keys.forEach((k, i) => {
+    const b = document.createElement("button");
+    b.className = "tab"; b.type = "button"; b.textContent = labels[i];
+    b.setAttribute("aria-pressed", k === initial ? "true" : "false");
+    b.addEventListener("click", () => {
+      el.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true"); onPick(k);
+    });
+    el.appendChild(b);
+  });
+}
+
+/* ---------------- Demo 1 ---------------- */
+let ampConcept = "van_gogh";
+const ampS = document.getElementById("amp-s");
+function ampUpdate() {
+  const s = STRENGTHS[+ampS.value];
+  const img = document.getElementById("amp-edit");
+  img.src = `demo/amplify/${ampConcept}_${s === "0" ? "base" : s}.jpg`;
+  img.alt = s === "0" ? "Unedited image" : `City street with the ${NAMES[ampConcept]} feature added at strength ${s}`;
+  document.getElementById("amp-cap").textContent = s === "0" ? "Edited (strength off)" : `Feature ${FEAT[ampConcept]} added, ×${s}`;
+  document.getElementById("amp-sv").textContent = s === "0" ? "off" : "×" + s;
+  const d = s === "0" ? { concept_delta: 0, concept_delta_std: 0, prompt_delta: 0, prompt_delta_std: 0 } : DATA.amplify[ampConcept][s];
+  document.getElementById("amp-c").textContent = fmt(d.concept_delta);
+  document.getElementById("amp-p").textContent = fmt(d.prompt_delta);
+  document.getElementById("amp-csd").textContent = s === "0" ? "baseline" : "± " + d.concept_delta_std.toFixed(3);
+  document.getElementById("amp-psd").textContent = s === "0" ? "baseline" : "± " + d.prompt_delta_std.toFixed(3);
+  document.getElementById("amp-note").textContent = NOTES[ampConcept];
+  ampChart(+ampS.value);
+}
+function ampChart(active) {
+  const W = 340, H = 190, m = { l: 40, r: 10, t: 10, b: 24 };
+  const xs = [0, 1, 2, 4, 8], xpos = i => m.l + (i / 4) * (W - m.l - m.r);
+  const series = [["concept_delta", "--s1", "toward the concept"], ["prompt_delta", "--s2", "match to the prompt"]];
+  const ymax = 0.08, ymin = -0.07;
+  const y = v => m.t + (ymax - v) / (ymax - ymin) * (H - m.t - m.b);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Dose-response chart for ${NAMES[ampConcept]}">`;
+  [-0.06, -0.03, 0, 0.03, 0.06].forEach(t => {
+    svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${css(t === 0 ? "--ink-3" : "--line")}" stroke-width="1"/>`;
+    svg += `<text x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${t === 0 ? "0" : fmt(t, 2)}</text>`;
+  });
+  xs.forEach((x, i) => svg += `<text x="${xpos(i)}" y="${H - 6}" text-anchor="middle">${i === 0 ? "off" : "×" + x}</text>`);
+  series.forEach(([k, col, label]) => {
+    const pts = xs.map((x, i) => [xpos(i), y(i === 0 ? 0 : DATA.amplify[ampConcept][String(x)][k])]);
+    svg += `<polyline fill="none" stroke="${css(col)}" stroke-width="2" stroke-linejoin="round" points="${pts.map(p => p.join(",")).join(" ")}"/>`;
+    pts.forEach((p, i) => {
+      const v = i === 0 ? 0 : DATA.amplify[ampConcept][String(xs[i])][k];
+      const sd = i === 0 ? 0 : DATA.amplify[ampConcept][String(xs[i])][k + "_std"];
+      const r = i === active ? 6 : 4;
+      svg += `<circle cx="${p[0]}" cy="${p[1]}" r="${r}" fill="${css(col)}" stroke="${css("--surface")}" stroke-width="2"/>`;
+      svg += `<circle cx="${p[0]}" cy="${p[1]}" r="12" fill="transparent" data-tip="${label}<br>${i === 0 ? "off" : "×" + xs[i]}: ${fmt(v)}${i ? " ± " + sd.toFixed(3) : ""}"/>`;
+    });
+  });
+  svg += `<line x1="${xpos(active)}" x2="${xpos(active)}" y1="${m.t}" y2="${H - m.b}" stroke="${css("--ink-3")}" stroke-dasharray="3 3"/>`;
+  svg += `</svg>`;
+  const el = document.getElementById("amp-chart");
+  el.innerHTML = svg;
+  el.querySelectorAll("[data-tip]").forEach(c => {
+    c.addEventListener("mousemove", e => showTip(e, c.dataset.tip));
+    c.addEventListener("mouseleave", hideTip);
+  });
+}
+tabs(document.getElementById("amp-tabs"), Object.keys(NAMES),
+     Object.keys(NAMES).map(k => `${NAMES[k]} (feature ${FEAT[k]})`), k => { ampConcept = k; ampUpdate(); }, ampConcept);
+document.getElementById("amp-base").src = "demo/amplify/van_gogh_base.jpg";
+ampS.addEventListener("input", ampUpdate);
+// preload
+Object.keys(NAMES).forEach(c => STRENGTHS.slice(1).forEach(s => { const i = new Image(); i.src = `demo/amplify/${c}_${s}.jpg`; }));
+
+/* ---------------- Demo 2 ---------------- */
+let erConcept = "dog", erSetting = "top20";
+const ER_ORDER = ["dog", "van_gogh", "fire", "watercolour"];
+function row(el, label, key) {
+  el.innerHTML = `<div class="lab">${label}</div>` +
+    [0, 1, 2, 3].map(j => `<img src="demo/erase/${erConcept}_${key}_${j}.jpg" alt="${label}, prompt ${j + 1}" width="192" height="192">`).join("");
+}
+function erUpdate() {
+  row(document.getElementById("er-row-base"), "Unedited", "base");
+  const lab = ERASE_SETTINGS.find(s => s[0] === erSetting)[1];
+  row(document.getElementById("er-row-edit"), lab, erSetting);
+  const d = DATA.erase[erConcept][erSetting];
+  document.getElementById("er-size").textContent = (100 * d.edit_rel_norm).toFixed(0) + "%";
+  document.getElementById("er-c").textContent = fmt(d.concept_delta, 4);
+  document.getElementById("er-csd").textContent = "± " + d.concept_delta_std.toFixed(4) + " (3 seeds)";
+  document.getElementById("er-h").textContent = fmt(d.holdout_prompt_delta, 4);
+}
+tabs(document.getElementById("er-tabs"), ER_ORDER, ER_ORDER.map(k => NAMES[k][0].toUpperCase() + NAMES[k].slice(1)), k => { erConcept = k; erUpdate(); }, erConcept);
+tabs(document.getElementById("er-seg"), ERASE_SETTINGS.map(s => s[0]), ERASE_SETTINGS.map(s => s[1]), k => { erSetting = k; erUpdate(); }, erSetting);
+
+/* ---------------- Loss recovered chart ---------------- */
+const KINDS = [["bucketed", "per-phase SAE (1M tokens each)", "--s1"], ["pooled_matched", "pooled SAE, same data (1M)", "--s2"], ["pooled", "pooled SAE, all data (3M)", "--s3"]];
+const PHASES = ["texture", "structure", "composition"];
+function lrChart() {
+  document.getElementById("lr-legend").innerHTML = KINDS.map(k => `<span><span class="dot" style="background:var(${k[2]})"></span>${k[1]}</span>`).join("");
+  const W = 900, H = 280, m = { l: 44, r: 10, t: 14, b: 30 };
+  const gw = (W - m.l - m.r) / 3, bw = Math.min(56, gw / 4.2), gap = 2;
+  const y = v => m.t + (1 - v) * (H - m.t - m.b);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Loss recovered by SAE type and phase">`;
+  [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+    svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${css(t === 0 ? "--ink-3" : "--line")}"/>`;
+    svg += `<text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${t.toFixed(2)}</text>`;
+  });
+  PHASES.forEach((ph, b) => {
+    const cx = m.l + gw * (b + 0.5);
+    svg += `<text x="${cx}" y="${H - 8}" text-anchor="middle" style="font-size:13px">${ph}</text>`;
+    KINDS.forEach(([k, label, col], i) => {
+      const d = DATA.faith[`${k}_b${b}`];
+      const x = cx + (i - 1) * (bw + gap) - bw / 2;
+      const top = y(d.lr), base = y(0);
+      svg += `<path d="M${x},${base} V${top + 4} Q${x},${top} ${x + 4},${top} H${x + bw - 4} Q${x + bw},${top} ${x + bw},${top + 4} V${base} Z" fill="${css(col)}"/>`;
+      svg += `<line x1="${x + bw / 2}" x2="${x + bw / 2}" y1="${y(d.lr + d.sd)}" y2="${y(d.lr - d.sd)}" stroke="${css("--ink-2")}" stroke-width="1.5"/>`;
+      svg += `<text x="${x + bw / 2}" y="${y(d.lr + d.sd) - 6}" text-anchor="middle" style="fill:var(--ink-2)">${d.lr.toFixed(2)}</text>`;
+      svg += `<rect x="${x - 2}" y="${m.t}" width="${bw + 4}" height="${H - m.t - m.b}" fill="transparent" data-tip="${label}<br>${ph}: ${d.lr.toFixed(3)} ± ${d.sd.toFixed(3)}"/>`;
+    });
+  });
+  svg += `</svg>`;
+  const el = document.getElementById("lr-chart");
+  el.innerHTML = svg;
+  el.querySelectorAll("[data-tip]").forEach(c => {
+    c.addEventListener("mousemove", e => showTip(e, c.dataset.tip));
+    c.addEventListener("mouseleave", hideTip);
+  });
+  document.getElementById("lr-table").innerHTML = `<table><thead><tr><th>SAE</th>${PHASES.map(p => `<th>${p}</th>`).join("")}</tr></thead><tbody>` +
+    KINDS.map(([k, label]) => `<tr><td>${label}</td>${[0, 1, 2].map(b => `<td>${DATA.faith[`${k}_b${b}`].lr.toFixed(3)} ± ${DATA.faith[`${k}_b${b}`].sd.toFixed(3)}</td>`).join("")}</tr>`).join("") + `</tbody></table>`;
+}
+
+function renderAll() { ampUpdate(); erUpdate(); lrChart(); }
+renderAll();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+</script>
+</body>
+</html>
